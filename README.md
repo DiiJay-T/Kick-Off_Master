@@ -22,7 +22,7 @@ Historical match data is observational. A model trained on it can identify patte
 
 ## Project status
 
-**Stage 1 — Project foundation.** Repository structure and data-loading pipeline are being established. Model outputs will not be presented until the data and evaluation pipeline have been validated.
+**Baseline trained; dashboard prototype in progress.** The current logistic-regression baseline uses match-state features only. Its outcome labels are provisional pending further validation. The Streamlit prototype makes this limitation visible and does not claim to rank individual replacement players.
 
 ## Repository layout
 
