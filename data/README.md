@@ -51,6 +51,26 @@ python -m src.data.validate_matches --data-dir data/raw/matches --output data/va
 
 The validator reads source files without modifying them. The optional report is a separate output file.
 
+## Build the substitution table
+
+After the match files have been downloaded and validated, run this command from the repository root:
+
+```bash
+python -m src.data.build_substitutions
+```
+
+This creates `data/processed/substitutions.csv`, with one row per valid substitution. The table includes match identifiers and dates, competition (from the source filename), team and home/away side, substitution minute, incoming and outgoing player IDs, and the recorded final match score.
+
+**Important:** `final_home_score` and `final_away_score` are the final match scores, not the score at the time of the substitution. The current match-metadata files do not provide a verified score-at-substitution field. Malformed substitution entries are skipped by the shared loader.
+
+You can override the input and output paths:
+
+```bash
+python -m src.data.build_substitutions --matches-dir data/raw/matches --output data/processed/substitutions.csv
+```
+
+The processed CSV is generated locally; raw and processed data should not be committed to the public repository.
+
 ## Local layout
 
 - `raw/` — original downloaded archives and extracted files.
