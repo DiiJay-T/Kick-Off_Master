@@ -20,54 +20,38 @@ From the repository root, run:
 python -m scripts.download_wyscout
 ```
 
-The downloader stores the original archives and JSON files in `data/raw/`, then extracts the match and event archives into:
-
-- `data/raw/matches/`
-- `data/raw/events/`
-
-The players and teams JSON files remain directly in `data/raw/`.
-
-To choose another local destination:
-
-```bash
-python -m scripts.download_wyscout --output-dir path/to/wyscout-data
-```
-
-The script skips non-empty files that are already present. Delete a damaged or incomplete local download before rerunning it.
+The downloader stores the original archives and JSON files in `data/raw/`, then extracts the match and event archives into `data/raw/matches/` and `data/raw/events/`.
 
 ## Validate match metadata
-
-After downloading, run:
 
 ```bash
 python -m src.data.validate_matches --data-dir data/raw/matches
 ```
 
-To save a separate report:
-
-```bash
-python -m src.data.validate_matches --data-dir data/raw/matches --output data/validation_report.json
-```
-
-The validator reads source files without modifying them. The optional report is a separate output file.
-
 ## Build the substitution table
-
-After the match files have been downloaded and validated, run this command from the repository root:
 
 ```bash
 python -m src.data.build_substitutions
 ```
 
-This creates `data/processed/substitutions.csv`, with one row per valid substitution. The table includes match identifiers and dates, competition (from the source filename), team and home/away side, substitution minute, incoming and outgoing player IDs, and the recorded final match score.
+This creates `data/processed/substitutions.csv`, with one row per valid substitution. The final-score columns are the recorded full-time score, not the score at substitution time.
 
-**Important:** `final_home_score` and `final_away_score` are the final match scores, not the score at the time of the substitution. The current match-metadata files do not provide a verified score-at-substitution field. Malformed substitution entries are skipped by the shared loader.
-
-You can override the input and output paths:
+## Reconstruct substitution match state
 
 ```bash
-python -m src.data.build_substitutions --matches-dir data/raw/matches --output data/processed/substitutions.csv
+python -m src.data.build_match_state
 ```
+
+This creates `data/processed/substitution_match_state.csv`. It joins substitutions to match and event data and derives:
+
+- Home and away score at the substitution minute.
+- The substituting team's score state (leading, level, or trailing).
+- Goals for and against during the following 15 minutes.
+- A descriptive outcome label (positive, neutral, or negative), based on the goal difference in that window.
+
+The current implementation uses Wyscout's goal tag (101) on Shot events. It does not yet classify own goals; own-goal handling must be validated against the source encoding before being included. Event timestamps reset at half-time, so second-half event seconds are offset by 45 minutes. Substitution times are recorded as whole minutes, meaning score timing is approximate at minute-level precision.
+
+**Research limitation:** the next-15-minute label is an observed match outcome after a substitution, not evidence that the substitution caused that outcome. It is a preliminary target for analysis and must be interpreted with match context and model validation.
 
 The processed CSV is generated locally; raw and processed data should not be committed to the public repository.
 
@@ -75,5 +59,3 @@ The processed CSV is generated locally; raw and processed data should not be com
 
 - `raw/` — original downloaded archives and extracted files.
 - `processed/` — derived tables created by the project.
-
-Raw data and local reports should not be committed to the public repository.
