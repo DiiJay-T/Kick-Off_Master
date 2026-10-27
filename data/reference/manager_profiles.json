@@ -1,0 +1,105 @@
+{
+  "metadata": {
+    "dataset_context": "2017/18 football season; initial curated reference set, not an exhaustive manager register",
+    "purpose": "Provide research-derived tactical context alongside Wyscout event-derived team and player metrics.",
+    "interpretation": "These are qualitative, season-scoped reference notes. They are not model predictions, fixed personality traits, or proof that a team used one style in every match.",
+    "sources": [
+      {
+        "title": "Premier League: Tactical review — Coaches show flexibility",
+        "url": "https://www.premierleague.com/en/news/693265",
+        "published": "2018-05-24",
+        "supports": "2017/18 tactical diversity, formation trends, and the need to avoid treating a manager as tactically fixed."
+      },
+      {
+        "title": "The Sport Journal: Pep Guardiola and Manchester City, 2017-2018: A Case Study",
+        "url": "https://thesportjournal.org/article/pep-guardiola-and-manchester-city-2017-2018-a-case-study/",
+        "published": "2018",
+        "supports": "Manchester City's positional possession, distribution, transition and pressing framework."
+      },
+      {
+        "title": "Coaches' Voice: The tactical evolution of Pep Guardiola's Manchester City",
+        "url": "https://learning.coachesvoice.com/cv/pep-guardiola-man-city-tactics-2016-2026/",
+        "supports": "Inverted full-backs, central overloads, build-up structure and possession context."
+      },
+      {
+        "title": "Reuters: List of Premier League managers for the 2017-18 season",
+        "url": "https://uk.sports.yahoo.com/news/soccer-list-premier-league-managers-2017-18-season-133000282--sow.html",
+        "published": "2017-08-04",
+        "supports": "Opening-day manager identities only; later changes must be represented separately."
+      }
+    ]
+  },
+  "profiles": [
+    {
+      "manager_name": "Pep Guardiola",
+      "team_name": "Manchester City",
+      "season": "2017/18",
+      "identity_scope": "season_reference",
+      "tactical_tags": ["positional_play", "possession_dominance", "inverted_fullbacks", "central_overloads", "structured_counterpress"],
+      "qualitative_summary": "A positional-play approach built around controlled possession, central numerical advantages and structured rest defence. The team's shape could change between build-up and attacking phases.",
+      "formation_context": ["4-3-3", "in-possession shape varied by phase"],
+      "confidence": "high",
+      "evidence_type": "published tactical analysis",
+      "source_urls": [
+        "https://thesportjournal.org/article/pep-guardiola-and-manchester-city-2017-2018-a-case-study/",
+        "https://learning.coachesvoice.com/cv/pep-guardiola-man-city-tactics-2016-2026/"
+      ]
+    },
+    {
+      "manager_name": "Jürgen Klopp",
+      "team_name": "Liverpool",
+      "season": "2017/18",
+      "identity_scope": "season_reference",
+      "tactical_tags": ["high_press", "counterpress", "fast_transitions", "vertical_attacking"],
+      "qualitative_summary": "Associated with aggressive pressing and rapid attacking transitions after regaining possession. Treat these as tendencies to test against the season's event data, not assumptions about every match.",
+      "formation_context": ["4-3-3"],
+      "confidence": "medium",
+      "evidence_type": "published season tactical review plus established coaching profile",
+      "source_urls": [
+        "https://www.premierleague.com/en/news/693265"
+      ]
+    },
+    {
+      "manager_name": "Arsène Wenger",
+      "team_name": "Arsenal",
+      "season": "2017/18",
+      "identity_scope": "season_reference",
+      "tactical_tags": ["possession", "combination_play", "attacking_width", "formation_flexibility"],
+      "qualitative_summary": "Arsenal used multiple shapes during the season, including a prominent back-three structure at times. Do not reduce the season to a single formation or one fixed tactical label.",
+      "formation_context": ["4-2-3-1", "3-4-2-1"],
+      "confidence": "medium",
+      "evidence_type": "Premier League season tactical review",
+      "source_urls": [
+        "https://www.premierleague.com/en/news/693265"
+      ]
+    },
+    {
+      "manager_name": "Antonio Conte",
+      "team_name": "Chelsea",
+      "season": "2017/18",
+      "identity_scope": "season_reference",
+      "tactical_tags": ["back_three", "wingback_width", "structured_defence", "wide_progression"],
+      "qualitative_summary": "The 3-4-2-1 was a prominent back-three system associated with Conte in the Premier League's 2017/18 tactical review. Chelsea also used other shapes; this is a reference tendency, not a match-level label.",
+      "formation_context": ["3-4-2-1", "back-three variants"],
+      "confidence": "high",
+      "evidence_type": "Premier League season tactical review",
+      "source_urls": [
+        "https://www.premierleague.com/en/news/693265"
+      ]
+    },
+    {
+      "manager_name": "Sean Dyche",
+      "team_name": "Burnley",
+      "season": "2017/18",
+      "identity_scope": "season_reference",
+      "tactical_tags": ["compact_defence", "back_four", "direct_play", "set_piece_emphasis"],
+      "qualitative_summary": "The Premier League review identifies Burnley among the teams with the fewest starting formations and notes Dyche retained a traditional back four throughout the season. Other style tags should be validated against event data before being scored.",
+      "formation_context": ["back four"],
+      "confidence": "medium",
+      "evidence_type": "Premier League season tactical review",
+      "source_urls": [
+        "https://www.premierleague.com/en/news/693265"
+      ]
+    }
+  ]
+}
