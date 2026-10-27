@@ -26,7 +26,7 @@ def test_reconstructs_score_and_next_15_minute_outcome(tmp_path):
         {"eventName": "Shot", "tags": [{"id": 101}], "matchId": 10, "teamId": 1,
          "matchPeriod": "1H", "eventSec": 1200},
         {"eventName": "Shot", "tags": [{"id": 101}], "matchId": 10, "teamId": 2,
-         "matchPeriod": "2H", "eventSec": 500},
+         "matchPeriod": "2H", "eventSec": 1100},
         {"eventName": "Shot", "tags": [{"id": 101}], "matchId": 10, "teamId": 1,
          "matchPeriod": "2H", "eventSec": 1000},
         {"eventName": "Shot", "tags": [], "matchId": 10, "teamId": 2,
