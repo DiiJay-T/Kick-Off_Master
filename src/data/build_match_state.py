@@ -2,9 +2,8 @@
 
 Wyscout event seconds reset at the start of each half. Substitution minutes are
 whole match minutes, so comparisons are approximate to the recorded minute.
-Goal events are identified by the Wyscout goal tag (101) on Shot events.
-Own-goal handling is deliberately excluded until its source encoding is
-validated; this prevents silently assigning goals to the wrong side.
+Normal goals use tag 101 on Shot or Free Kick events. Own goals use tag 102
+and are credited to the team opposing the event's teamId.
 """
 
 from __future__ import annotations
@@ -16,6 +15,8 @@ from pathlib import Path
 import pandas as pd
 
 GOAL_TAG_ID = 101
+OWN_GOAL_TAG_ID = 102
+GOAL_EVENT_NAMES = {"Shot", "Free Kick"}
 OUTPUT_COLUMNS = [
     "match_id", "team_id", "team_side", "minute", "player_in", "player_out",
     "home_score_at_substitution", "away_score_at_substitution",
@@ -33,11 +34,28 @@ def _absolute_seconds(event: dict) -> float | None:
     return float(seconds) + (2700.0 if period == "2H" else 0.0)
 
 
-def _is_goal(event: dict, goal_tag_id: int = GOAL_TAG_ID) -> bool:
-    return event.get("eventName") == "Shot" and any(
-        isinstance(tag, dict) and tag.get("id") == goal_tag_id
-        for tag in event.get("tags", [])
-    )
+def _goal_team_id(event: dict, home_id: int, away_id: int) -> int | None:
+    """Return the team credited with a goal, or None for non-goal events."""
+    tags = event.get("tags", [])
+    tag_ids = {
+        tag.get("id") for tag in tags if isinstance(tag, dict)
+    }
+    event_team = event.get("teamId")
+    if event_team is None:
+        return None
+    event_team = int(event_team)
+
+    if OWN_GOAL_TAG_ID in tag_ids:
+        if event_team == home_id:
+            return away_id
+        if event_team == away_id:
+            return home_id
+        return None
+
+    if event.get("eventName") in GOAL_EVENT_NAMES and GOAL_TAG_ID in tag_ids:
+        return event_team if event_team in {home_id, away_id} else None
+
+    return None
 
 
 def build_match_state_table(
@@ -78,15 +96,18 @@ def build_match_state_table(
         with path.open(encoding="utf-8") as handle:
             events = json.load(handle)
         for event in events:
-            if not _is_goal(event):
+            match_id = event.get("matchId")
+            if match_id is None or int(match_id) not in team_lookup:
+                continue
+            home_id, away_id = team_lookup[int(match_id)]
+            scoring_team = _goal_team_id(event, home_id, away_id)
+            if scoring_team is None:
                 continue
             timestamp = _absolute_seconds(event)
-            match_id = event.get("matchId")
-            team_id = event.get("teamId")
-            if timestamp is None or match_id is None or team_id is None:
+            if timestamp is None:
                 continue
             goals_by_match.setdefault(int(match_id), []).append(
-                (timestamp, int(team_id))
+                (timestamp, scoring_team)
             )
 
     rows = []
