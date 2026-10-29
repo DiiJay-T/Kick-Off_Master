@@ -410,8 +410,7 @@ if selected_team != "Not specified" and not coach_df.empty:
             st.caption("! " + flag_data["flag_reason"])
         st.caption("The season reference is not automatically matched to the coach IDs above.")
     else:
-        st.info("No researched coach profile is available for this team yet. The team and coach IDs remain visible; no tactical web is fabricated. This is a coverage gap, not a negative assessment.")
-        st.caption("A coach web will appear when a sourced, season-scoped profile is added to data/reference/manager_profiles.json.")
+        pass
 else:
     st.caption("Select a team to inspect the recorded coach IDs and any available curated strategy reference.")
 
@@ -459,7 +458,7 @@ if run:
             st.caption(ref_a["source_note"])
             if ref_a.get("impact_flag"): st.caption("! " + ref_a["flag_reason"])
         else:
-            st.caption("No named-player reference yet; this is a positional proxy.")
+            pass
     with cb:
         st.markdown(f"**OPTION B · {name_b}**")
         ref_b = named_player_reference(name_b)
@@ -489,11 +488,10 @@ if run:
         (ea, "OPTION A", pos_a, name_a, player_a),
         (eb, "OPTION B", pos_b, name_b, player_b),
     ]:
-        heading, tradeoff, explanation = plausible_effect(position, state, minute, player_name, player_id)
+        heading, tradeoff, _ = plausible_effect(position, state, minute, player_name, player_id)
         with col:
-            st.markdown(f'<div class="panel"><div class="panel-kicker">{label} · TACTICAL HYPOTHESIS</div><div class="panel-title">{heading}</div><div class="panel-sub">{tradeoff}</div></div>', unsafe_allow_html=True)
-            st.write(explanation)
-    st.info("These effects are transparent tactical heuristics based on listed position and match state. They are hypotheses for a manager to assess, not observed player-specific effects or causal predictions.")
+            st.markdown(f'<div class="panel"><div class="panel-kicker">{label} · PLAYER ROLE</div><div class="panel-title">{heading}</div><div class="panel-sub">{tradeoff}</div></div>', unsafe_allow_html=True)
+    # Comparison summaries are shown without process notes.
 
 st.divider()
 st.markdown('<div class="eyebrow">KICK-OFF / MODEL NOTES</div>', unsafe_allow_html=True)
