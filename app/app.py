@@ -404,7 +404,7 @@ if selected_team != "Not specified" and not coach_df.empty:
         flag = " !" if flag_data.get("impact_flag") else ""
         st.markdown(f"**Coach profile{flag}: {manager_name} · {reference.get('season', 'season not specified')}**")
         st.write(reference.get("qualitative_summary", "No written tactical summary is available."))
-        st.plotly_chart(manager_web_figure(reference), use_container_width=True, config={"displayModeBar":False})
+        st.plotly_chart(manager_web_figure(reference), width="stretch", config={"displayModeBar":False})
         st.caption(f"Evidence: {reference.get('evidence_type','not specified')} · confidence: {reference.get('confidence','not rated')}. Web dimensions are encoded from documented tactical tags, not measured match-by-match scores.")
         if flag_data.get("impact_flag"):
             st.caption("! " + flag_data["flag_reason"])
@@ -419,7 +419,7 @@ else:
 if player_a == player_b:
     st.warning("Choose two different players to make the comparison meaningful.")
 
-run = st.button("ANALYSE MATCH CONTEXT  →", type="primary", use_container_width=True, disabled=(player_a == player_b))
+run = st.button("ANALYSE MATCH CONTEXT  →", type="primary", width="stretch", disabled=(player_a == player_b))
 if run:
     model = joblib.load(MODEL)
     probs = predict_match_state(
@@ -433,7 +433,7 @@ if run:
     for col, outcome in zip(metrics, ["positive", "neutral", "negative"]):
         col.metric(f"{outcome.title()} outcome", f"{probs.get(outcome, 0):.1%}")
     chart = pd.DataFrame({"Estimated probability": [probs.get(k, 0) for k in ["positive", "neutral", "negative"]]}, index=["Positive", "Neutral", "Negative"])
-    st.bar_chart(chart, use_container_width=True)
+    st.bar_chart(chart, width="stretch")
     st.markdown('<div class="section-label">05 / PLAYER PROFILES</div>', unsafe_allow_html=True)
     st.caption("FIFA 18 card ratings are mapped to broad tactical dimensions where a conservative Wyscout name match exists. Otherwise a named qualitative reference or position proxy is shown. Card ratings are game data, not real-world event measurements.")
     ca, cb = st.columns(2)
@@ -441,7 +441,7 @@ if run:
         st.markdown(f"**OPTION A · {name_a}**")
         ref_a = named_player_reference(name_a)
         st.markdown(f"**{name_a}{' !' if ref_a and ref_a.get('impact_flag') else ''}**")
-        st.plotly_chart(player_web_figure(pos_a, name_a, player_a), use_container_width=True, config={"displayModeBar":False})
+        st.plotly_chart(player_web_figure(pos_a, name_a, player_a), width="stretch", config={"displayModeBar":False})
         detail_a = fifa_player_explanation(name_a, player_a)
         if detail_a is not None:
             st.markdown("**FIFA 18 attribute snapshot · Option A**")
@@ -452,7 +452,7 @@ if run:
                 if stat_name in snapshot.index:
                     stat_col.metric(stat_name, f"{snapshot[stat_name]:.0f}/100")
             with st.expander("View all available attributes and definitions"):
-                st.dataframe(detail_a[["Attribute", "FIFA 18 rating"]], hide_index=True, use_container_width=True)
+                st.dataframe(detail_a[["Attribute", "FIFA 18 rating"]], hide_index=True, width="stretch")
                 st.caption("These are FIFA 18 game ratings, not measured match performance.")
         if ref_a:
             st.write(ref_a["summary"])
@@ -464,7 +464,7 @@ if run:
         st.markdown(f"**OPTION B · {name_b}**")
         ref_b = named_player_reference(name_b)
         st.markdown(f"**{name_b}{' !' if ref_b and ref_b.get('impact_flag') else ''}**")
-        st.plotly_chart(player_web_figure(pos_b, name_b, player_b), use_container_width=True, config={"displayModeBar":False})
+        st.plotly_chart(player_web_figure(pos_b, name_b, player_b), width="stretch", config={"displayModeBar":False})
         detail_b = fifa_player_explanation(name_b, player_b)
         if detail_b is not None:
             st.markdown("**FIFA 18 attribute snapshot · Option B**")
@@ -475,7 +475,7 @@ if run:
                 if stat_name in snapshot.index:
                     stat_col.metric(stat_name, f"{snapshot[stat_name]:.0f}/100")
             with st.expander("View all available attributes and definitions"):
-                st.dataframe(detail_b[["Attribute", "FIFA 18 rating"]], hide_index=True, use_container_width=True)
+                st.dataframe(detail_b[["Attribute", "FIFA 18 rating"]], hide_index=True, width="stretch")
                 st.caption("These are FIFA 18 game ratings, not measured match performance.")
         if ref_b:
             st.write(ref_b["summary"])
