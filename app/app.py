@@ -1,20 +1,63 @@
-"""KICK-OFF substitution comparison prototype."""
+"""KICK-OFF — football substitution decision-support prototype."""
 from pathlib import Path
+import sys
 import json
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 import joblib
 import pandas as pd
 import streamlit as st
 from src.models.predict import predict_match_state
 
-ROOT = Path(__file__).resolve().parents[1]
+st.set_page_config(page_title="KICK-OFF | Substitution Lab", page_icon="⚽", layout="wide")
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
+:root { --ink:#eaf0f6; --muted:#91a0b2; --panel:#111d2b; --line:#263648; --lime:#c8f169; }
+html, body, [class*="css"] { font-family:'Manrope',sans-serif; }
+.stApp { background: radial-gradient(ellipse at 75% 0%, #1c3440 0%, #0a1420 48%, #08111b 100%); color:var(--ink); }
+.block-container { max-width:1240px; padding-top:2.1rem; padding-bottom:3rem; }
+[data-testid="stSidebar"] { background:#0c1723; border-right:1px solid #263648; }
+[data-testid="stSidebar"] * { color:#eaf0f6; }
+.eyebrow { color:var(--lime); font-family:'DM Mono',monospace; letter-spacing:.18em; font-size:.72rem; }
+.hero { padding:1.6rem 0 1.3rem 0; border-bottom:1px solid var(--line); margin-bottom:1.5rem; }
+.hero h1 { font-size:3.1rem; font-weight:800; letter-spacing:-.07em; line-height:1; margin:.45rem 0; color:#f4f7fa; }
+.hero p { color:#9cabb9; font-size:.9rem; letter-spacing:.11em; }
+.section-label { color:var(--lime); font-family:'DM Mono',monospace; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; margin:1.2rem 0 .7rem; }
+.panel { background:linear-gradient(145deg,rgba(22,37,53,.96),rgba(13,25,38,.96)); border:1px solid var(--line); border-radius:16px; padding:1.2rem 1.3rem; min-height:125px; }
+.panel-kicker { color:#91a0b2; font-family:'DM Mono',monospace; font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; }
+.panel-title { color:#f1f5f8; font-size:1.15rem; font-weight:800; margin:.45rem 0 .2rem; }
+.panel-sub { color:#9cabb9; font-size:.82rem; }
+.pill { display:inline-block; border:1px solid #496044; color:var(--lime); border-radius:99px; padding:.22rem .65rem; font-family:'DM Mono',monospace; font-size:.68rem; }
+.note { background:#142332; border-left:3px solid var(--lime); padding:1rem 1.1rem; border-radius:0 10px 10px 0; color:#b9c5d0; font-size:.88rem; }
+div.stButton > button[kind="primary"] { background:var(--lime); color:#101a21; border:0; border-radius:10px; font-weight:800; min-height:3rem; }
+div.stButton > button[kind="primary"]:hover { background:#d8ff8b; color:#101a21; }
+h2,h3 { color:#f1f5f8 !important; }
+[data-testid="stMetric"] { background:#111d2b; border:1px solid #263648; border-radius:12px; padding:1rem; }
+[data-testid="stMetricLabel"] { color:#a5b2bf !important; }
+[data-testid="stMetricValue"] { color:#f1f5f8 !important; }
+div[data-baseweb="select"] > div, div[data-baseweb="input"] > div { background:#111d2b; border-color:#34485b; }
+hr { border-color:#263648; }
+footer { visibility:hidden; }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div class="hero">
+  <div class="eyebrow">FOOTBALL INTELLIGENCE · DECISION SCIENCE · MACHINE LEARNING</div>
+  <h1>KICK-OFF<span style="color:#c8f169">.</span></h1>
+  <p>SUBSTITUTION LAB &nbsp; / &nbsp; MATCH-STATE ANALYSIS</p>
+  <span class="pill">RESEARCH PROTOTYPE · BASELINE MODEL</span>
+</div>
+""", unsafe_allow_html=True)
+
 MODEL = ROOT / "models/logistic_regression_baseline.joblib"
 SUBS = ROOT / "data/processed/substitutions.csv"
 PLAYERS = ROOT / "data/raw/players.json"
-
-st.set_page_config(page_title="KICK-OFF | Substitution Lab", page_icon="⚽", layout="wide")
-st.title("⚽ KICK-OFF")
-st.caption("FOOTBALL INTELLIGENCE · DECISION SCIENCE · MACHINE LEARNING")
-st.subheader("Substitution comparison lab")
 
 if not MODEL.exists() or not SUBS.exists():
     st.error("Required files are missing. Follow the setup and training steps in the README.")
@@ -22,6 +65,10 @@ if not MODEL.exists() or not SUBS.exists():
 
 subs = pd.read_csv(SUBS)
 ids = sorted(set(subs.player_in.dropna().astype(int)) | set(subs.player_out.dropna().astype(int)))
+if not ids:
+    st.error("No player IDs were found in the substitution dataset.")
+    st.stop()
+
 profiles = {}
 if PLAYERS.exists():
     try:
@@ -39,63 +86,67 @@ if PLAYERS.exists():
     except (OSError, ValueError, TypeError):
         st.warning("Player metadata could not be read; showing player IDs.")
 
-def label(pid):
-    return f"{profiles.get(int(pid), (f'Player {pid}', 'Not listed'))[0]} · #{pid}"
+def player_label(pid):
+    return f"{profiles.get(int(pid), (f'Player {pid}', 'Not listed'))[0]}  ·  #{pid}"
 
 with st.sidebar:
-    st.header("Match situation")
+    st.markdown('<div class="eyebrow">01 / MATCH CONTEXT</div>', unsafe_allow_html=True)
+    st.markdown("## Set the situation")
     minute = st.slider("Match minute", 1, 90, 60)
-    team_score = st.number_input("Your team's score", 0, 20, 1)
-    opponent_score = st.number_input("Opponent's score", 0, 20, 1)
-    team_side = st.selectbox("Your team", ["home", "away"])
+    st.markdown("**Current score**")
+    score_cols = st.columns(2)
+    with score_cols[0]:
+        team_score = st.number_input("Your team", 0, 20, 1)
+    with score_cols[1]:
+        opponent_score = st.number_input("Opponent", 0, 20, 1)
+    team_side = st.selectbox("Team location", ["home", "away"])
     state = "leading" if team_score > opponent_score else "trailing" if team_score < opponent_score else "level"
-    st.caption(f"Score state: **{state.title()}**")
+    st.markdown(f'<div class="panel"><div class="panel-kicker">LIVE MATCH STATE</div><div class="panel-title">{state.upper()}</div><div class="panel-sub">Minute {minute} &nbsp;·&nbsp; {team_score} – {opponent_score}</div></div>', unsafe_allow_html=True)
+    st.caption("Context is supplied manually for this prototype.")
 
-st.markdown("### Compare incoming players")
-a, b = st.columns(2)
+st.markdown('<div class="section-label">02 / PLAYER SHORTLIST</div>', unsafe_allow_html=True)
+st.markdown("### Compare two possible replacements")
+st.caption("Choose two players from the historical Wyscout substitution records.")
+
+a, b = st.columns(2, gap="large")
 with a:
-    st.markdown("**Option A**")
-    player_a = st.selectbox("Incoming player A", ids, format_func=label, key="player_a")
+    st.markdown('<div class="panel-kicker">OPTION A</div>', unsafe_allow_html=True)
+    player_a = st.selectbox("First incoming player", ids, format_func=player_label, key="player_a")
+    name_a, pos_a = profiles.get(int(player_a), (f"Player {player_a}", "Not listed"))
+    st.markdown(f'<div class="panel"><div class="panel-kicker">PLAYER PROFILE</div><div class="panel-title">{name_a}</div><div class="panel-sub">{pos_a} &nbsp;·&nbsp; Wyscout-listed position</div></div>', unsafe_allow_html=True)
 with b:
-    st.markdown("**Option B**")
-    player_b = st.selectbox("Incoming player B", ids, index=min(1, len(ids)-1), format_func=label, key="player_b")
-
-for col, pid in [(a, player_a), (b, player_b)]:
-    name, position = profiles.get(int(pid), (f"Player {pid}", "Not listed"))
-    with col:
-        st.write(f"**{name}**")
-        st.caption(f"Wyscout-listed position: {position}")
+    st.markdown('<div class="panel-kicker">OPTION B</div>', unsafe_allow_html=True)
+    default_b = min(1, len(ids) - 1)
+    player_b = st.selectbox("Second incoming player", ids, index=default_b, format_func=player_label, key="player_b")
+    name_b, pos_b = profiles.get(int(player_b), (f"Player {player_b}", "Not listed"))
+    st.markdown(f'<div class="panel"><div class="panel-kicker">PLAYER PROFILE</div><div class="panel-title">{name_b}</div><div class="panel-sub">{pos_b} &nbsp;·&nbsp; Wyscout-listed position</div></div>', unsafe_allow_html=True)
 
 if player_a == player_b:
-    st.warning("Select two different players to compare two options.")
+    st.warning("Choose two different players to make the comparison meaningful.")
 
-if st.button("Compare match context", type="primary", use_container_width=True):
+run = st.button("ANALYSE MATCH CONTEXT  →", type="primary", use_container_width=True, disabled=(player_a == player_b))
+if run:
     model = joblib.load(MODEL)
     probs = predict_match_state(
         model, minute=minute, team_score=team_score, opponent_score=opponent_score,
         team_side=team_side, score_state=state,
     )
-    st.markdown("### Estimated outcome for this match situation")
-    st.info(
-        "These probabilities use match minute, score, score difference and home/away "
-        "status only. Player identity, position, role, fitness and manager data are not "
-        "model inputs. The estimates are therefore identical for A and B and cannot "
-        "identify a better replacement."
-    )
-    cols = st.columns(3)
-    for col, outcome in zip(cols, ["positive", "neutral", "negative"]):
+    st.markdown('<div class="section-label">03 / MODEL OUTPUT</div>', unsafe_allow_html=True)
+    st.markdown("### Estimated outcome probabilities")
+    st.markdown('<div class="note">These estimates describe the match context only. The baseline model uses minute, score, score difference and home/away status. It does <b>not</b> use player identity, position, role, fitness or manager data. Therefore, the probabilities are the same for both options and do not identify a better replacement.</div>', unsafe_allow_html=True)
+    metrics = st.columns(3)
+    for col, outcome in zip(metrics, ["positive", "neutral", "negative"]):
         col.metric(f"{outcome.title()} outcome", f"{probs.get(outcome, 0):.1%}")
-    st.bar_chart(pd.DataFrame({"Probability": probs}).sort_index())
-    st.markdown("### Decision summary")
-    st.write(f"Option A: **{label(player_a)}** · Option B: **{label(player_b)}**")
-    st.write(
-        "Use listed position as basic player context, then assess tactical role, fitness "
-        "and match observation separately. KICK-OFF does not yet calculate role fit or "
-        "recommend a winner."
-    )
+    chart = pd.DataFrame({"Estimated probability": [probs.get(k, 0) for k in ["positive", "neutral", "negative"]]}, index=["Positive", "Neutral", "Negative"])
+    st.bar_chart(chart, use_container_width=True)
+    st.markdown('<div class="section-label">04 / DECISION NOTES</div>', unsafe_allow_html=True)
+    left, right = st.columns(2)
+    with left:
+        st.markdown(f'<div class="panel"><div class="panel-kicker">OPTION A</div><div class="panel-title">{name_a}</div><div class="panel-sub">{pos_a}</div></div>', unsafe_allow_html=True)
+    with right:
+        st.markdown(f'<div class="panel"><div class="panel-kicker">OPTION B</div><div class="panel-title">{name_b}</div><div class="panel-sub">{pos_b}</div></div>', unsafe_allow_html=True)
+    st.info("Use the listed position as basic context. Tactical role, fitness, opponent matchup and live observations still require human assessment. This prototype does not calculate role fit or recommend a winner.")
 
 st.divider()
-st.caption(
-    "Research prototype. Historical associations are not causal effects or guarantees. "
-    "Outcome labels remain provisional pending further validation."
-)
+st.markdown('<div class="eyebrow">KICK-OFF / MODEL NOTES</div>', unsafe_allow_html=True)
+st.caption("Historical associations are not causal effects or guarantees. Outcome labels are provisional pending further validation. Built as an educational decision-support research prototype.")
