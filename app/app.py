@@ -312,6 +312,23 @@ if selected_team != "Not specified" and not coach_df.empty:
     team_rows = coach_df[coach_df.team_name.astype(str) == selected_team]
     coach_ids = sorted(team_rows.coach_id.dropna().astype(int).unique())
     st.caption(f"Dataset records {len(team_rows)} coach appearances for {selected_team}; coach IDs: {', '.join(map(str, coach_ids))}. This is match-record identity, not a verified public manager name.")
+    # Compact season snapshot from observed match records; no formation is inferred.
+    team_matches = team_rows.drop_duplicates("match_id").copy()
+    for column in ["team_score", "opponent_score"]:
+        team_matches[column] = pd.to_numeric(team_matches[column], errors="coerce")
+    scored = team_matches.dropna(subset=["team_score", "opponent_score"])
+    if not scored.empty:
+        wins = int((scored.team_score > scored.opponent_score).sum())
+        draws = int((scored.team_score == scored.opponent_score).sum())
+        losses = int((scored.team_score < scored.opponent_score).sum())
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Matches", f"{len(scored)}")
+        k2.metric("W – D – L", f"{wins} – {draws} – {losses}")
+        k3.metric("Goals scored / match", f"{scored.team_score.mean():.2f}")
+        k4.metric("Goals conceded / match", f"{scored.opponent_score.mean():.2f}")
+        st.caption("Descriptive results from the available Wyscout match sample; not a tactical or formation rating.")
+    else:
+        st.info("Match score data is unavailable for this team in the local coach-appearance file.")
     reference = next((x for x in manager_data.get("profiles",[]) if x.get("team_name","").lower() == selected_team.lower()), None)
     if reference:
         manager_name = reference.get("manager_name", "Unverified coach identity")
@@ -341,7 +358,7 @@ if run:
         model, minute=minute, team_score=team_score, opponent_score=opponent_score,
         team_side=team_side, score_state=state,
     )
-    st.markdown('<div class="section-label">03 / MODEL OUTPUT</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">04 / MODEL OUTPUT</div>', unsafe_allow_html=True)
     st.markdown("### Estimated outcome probabilities")
     st.markdown('<div class="note">These estimates describe the match context only. The baseline model uses minute, score, score difference and home/away status. It does <b>not</b> use player identity, position, role, fitness or manager data. Therefore, the probabilities are the same for both options and do not identify a better replacement.</div>', unsafe_allow_html=True)
     metrics = st.columns(3)
@@ -349,7 +366,7 @@ if run:
         col.metric(f"{outcome.title()} outcome", f"{probs.get(outcome, 0):.1%}")
     chart = pd.DataFrame({"Estimated probability": [probs.get(k, 0) for k in ["positive", "neutral", "negative"]]}, index=["Positive", "Neutral", "Negative"])
     st.bar_chart(chart, use_container_width=True)
-    st.markdown('<div class="section-label">04 / PLAYER SKILL WEB</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">05 / PLAYER PROFILES</div>', unsafe_allow_html=True)
     st.caption("FIFA 18 card ratings are mapped to broad tactical dimensions where a conservative Wyscout name match exists. Otherwise a named qualitative reference or position proxy is shown. Card ratings are game data, not real-world event measurements.")
     ca, cb = st.columns(2)
     with ca:
@@ -359,9 +376,16 @@ if run:
         st.plotly_chart(player_web_figure(pos_a, name_a, player_a), use_container_width=True, config={"displayModeBar":False})
         detail_a = fifa_player_explanation(name_a, player_a)
         if detail_a is not None:
-            st.markdown("**Attribute breakdown · Option A**")
-            st.dataframe(detail_a, hide_index=True, use_container_width=True)
-            st.caption("Ratings are FIFA 18 game attributes. Interpretations describe the attribute's scope; they are not claims about observed match performance.")
+            st.markdown("**FIFA 18 attribute snapshot · Option A**")
+            preferred = ["Pace", "Shooting", "Passing", "Dribbling", "Defending", "Physical"]
+            snapshot = detail_a[detail_a["Attribute"].isin(preferred)].set_index("Attribute")["FIFA 18 rating"]
+            stat_cols = st.columns(3)
+            for stat_col, stat_name in zip(stat_cols, preferred):
+                if stat_name in snapshot.index:
+                    stat_col.metric(stat_name, f"{snapshot[stat_name]:.0f}/100")
+            with st.expander("View all available attributes and definitions"):
+                st.dataframe(detail_a[["Attribute", "FIFA 18 rating"]], hide_index=True, use_container_width=True)
+                st.caption("These are FIFA 18 game ratings, not measured match performance.")
         if ref_a:
             st.write(ref_a["summary"])
             st.caption(ref_a["source_note"])
@@ -375,16 +399,23 @@ if run:
         st.plotly_chart(player_web_figure(pos_b, name_b, player_b), use_container_width=True, config={"displayModeBar":False})
         detail_b = fifa_player_explanation(name_b, player_b)
         if detail_b is not None:
-            st.markdown("**Attribute breakdown · Option B**")
-            st.dataframe(detail_b, hide_index=True, use_container_width=True)
-            st.caption("Ratings are FIFA 18 game attributes. Interpretations describe the attribute's scope; they are not claims about observed match performance.")
+            st.markdown("**FIFA 18 attribute snapshot · Option B**")
+            preferred = ["Pace", "Shooting", "Passing", "Dribbling", "Defending", "Physical"]
+            snapshot = detail_b[detail_b["Attribute"].isin(preferred)].set_index("Attribute")["FIFA 18 rating"]
+            stat_cols = st.columns(3)
+            for stat_col, stat_name in zip(stat_cols, preferred):
+                if stat_name in snapshot.index:
+                    stat_col.metric(stat_name, f"{snapshot[stat_name]:.0f}/100")
+            with st.expander("View all available attributes and definitions"):
+                st.dataframe(detail_b[["Attribute", "FIFA 18 rating"]], hide_index=True, use_container_width=True)
+                st.caption("These are FIFA 18 game ratings, not measured match performance.")
         if ref_b:
             st.write(ref_b["summary"])
             st.caption(ref_b["source_note"])
             if ref_b.get("impact_flag"): st.caption("! " + ref_b["flag_reason"])
         else:
             st.caption("No named-player reference yet; this is a positional proxy.")
-    st.markdown('<div class="section-label">05 / PLAUSIBLE MATCH EFFECT</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">06 / PLAUSIBLE MATCH EFFECT</div>', unsafe_allow_html=True)
     ea, eb = st.columns(2)
     for col, label, position in [(ea, "OPTION A", pos_a), (eb, "OPTION B", pos_b)]:
         heading, tradeoff, explanation = plausible_effect(position, state, minute)
