@@ -1,118 +1,101 @@
-"""KICK-OFF substitution comparison prototype.
-
-The current baseline uses match-state features only. Candidate IDs are collected
-for the interface but are not model inputs, so both candidates receive the same
-baseline probabilities until player/role features are engineered and validated.
-"""
+"""KICK-OFF substitution comparison prototype."""
 from pathlib import Path
-
+import json
+import joblib
 import pandas as pd
 import streamlit as st
-
 from src.models.predict import predict_match_state
 
 ROOT = Path(__file__).resolve().parents[1]
-MODEL_PATH = ROOT / "models" / "logistic_regression_baseline.joblib"
-SUBSTITUTIONS_PATH = ROOT / "data" / "processed" / "substitutions.csv"
-
+MODEL = ROOT / "models/logistic_regression_baseline.joblib"
+SUBS = ROOT / "data/processed/substitutions.csv"
+PLAYERS = ROOT / "data/raw/players.json"
 
 st.set_page_config(page_title="KICK-OFF | Substitution Lab", page_icon="⚽", layout="wide")
 st.title("⚽ KICK-OFF")
 st.caption("FOOTBALL INTELLIGENCE · DECISION SCIENCE · MACHINE LEARNING")
 st.subheader("Substitution comparison lab")
-st.write("Set the match situation and compare two possible replacements.")
 
-if not MODEL_PATH.exists():
-    st.error("Baseline model not found. Train it first with: python -m src.models.train_baseline")
+if not MODEL.exists() or not SUBS.exists():
+    st.error("Required files are missing. Follow the setup and training steps in the README.")
     st.stop()
 
-if not SUBSTITUTIONS_PATH.exists():
-    st.error("Substitution data not found at data/processed/substitutions.csv.")
-    st.stop()
+subs = pd.read_csv(SUBS)
+ids = sorted(set(subs.player_in.dropna().astype(int)) | set(subs.player_out.dropna().astype(int)))
+profiles = {}
+if PLAYERS.exists():
+    try:
+        players = json.loads(PLAYERS.read_text(encoding="utf-8"))
+        for p in players:
+            pid = p.get("wyId")
+            if pid is None:
+                continue
+            name = p.get("shortName") or " ".join(
+                x for x in [p.get("firstName"), p.get("middleName"), p.get("lastName")] if x
+            ) or f"Player {pid}"
+            role = p.get("role")
+            position = role.get("name", "Not listed") if isinstance(role, dict) else "Not listed"
+            profiles[int(pid)] = (name, position)
+    except (OSError, ValueError, TypeError):
+        st.warning("Player metadata could not be read; showing player IDs.")
 
-try:
-    substitutions = pd.read_csv(SUBSTITUTIONS_PATH)
-    player_ids = sorted(
-        set(substitutions["player_in"].dropna().astype(int))
-        | set(substitutions["player_out"].dropna().astype(int))
-    )
-except (KeyError, ValueError, OSError) as exc:
-    st.error(f"Could not load the substitution data: {exc}")
-    st.stop()
+def label(pid):
+    return f"{profiles.get(int(pid), (f'Player {pid}', 'Not listed'))[0]} · #{pid}"
 
 with st.sidebar:
     st.header("Match situation")
     minute = st.slider("Match minute", 1, 90, 60)
-    team_score = st.number_input("Your team's score", min_value=0, max_value=20, value=1)
-    opponent_score = st.number_input("Opponent's score", min_value=0, max_value=20, value=1)
+    team_score = st.number_input("Your team's score", 0, 20, 1)
+    opponent_score = st.number_input("Opponent's score", 0, 20, 1)
     team_side = st.selectbox("Your team", ["home", "away"])
-    score_state = (
-        "leading" if team_score > opponent_score
-        else "trailing" if team_score < opponent_score
-        else "level"
-    )
-    st.caption(f"Current state: **{score_state.title()}**")
+    state = "leading" if team_score > opponent_score else "trailing" if team_score < opponent_score else "level"
+    st.caption(f"Score state: **{state.title()}**")
 
-st.markdown("### Candidate replacements")
-left, right = st.columns(2)
-default_a = player_ids[0] if player_ids else 0
-default_b = player_ids[1] if len(player_ids) > 1 else default_a
-with left:
+st.markdown("### Compare incoming players")
+a, b = st.columns(2)
+with a:
     st.markdown("**Option A**")
-    candidate_a = st.selectbox("Incoming player ID — A", player_ids, index=player_ids.index(default_a))
-with right:
+    player_a = st.selectbox("Incoming player A", ids, format_func=label, key="player_a")
+with b:
     st.markdown("**Option B**")
-    candidate_b = st.selectbox("Incoming player ID — B", player_ids, index=player_ids.index(default_b))
+    player_b = st.selectbox("Incoming player B", ids, index=min(1, len(ids)-1), format_func=label, key="player_b")
 
-if candidate_a == candidate_b:
-    st.warning("Choose two different player IDs to compare two options.")
+for col, pid in [(a, player_a), (b, player_b)]:
+    name, position = profiles.get(int(pid), (f"Player {pid}", "Not listed"))
+    with col:
+        st.write(f"**{name}**")
+        st.caption(f"Wyscout-listed position: {position}")
 
-if st.button("Compare options", type="primary", use_container_width=True):
-    try:
-        model = __import__("joblib").load(MODEL_PATH)
-        probabilities = predict_match_state(
-            model,
-            minute=minute,
-            team_score=team_score,
-            opponent_score=opponent_score,
-            team_side=team_side,
-            score_state=score_state,
-        )
-    except Exception as exc:
-        st.error(f"Prediction failed: {exc}")
-        st.stop()
+if player_a == player_b:
+    st.warning("Select two different players to compare two options.")
 
-    st.markdown("### Baseline outcome estimates")
+if st.button("Compare match context", type="primary", use_container_width=True):
+    model = joblib.load(MODEL)
+    probs = predict_match_state(
+        model, minute=minute, team_score=team_score, opponent_score=opponent_score,
+        team_side=team_side, score_state=state,
+    )
+    st.markdown("### Estimated outcome for this match situation")
     st.info(
-        "Important research limitation: this baseline model only uses match state "
-        "(minute, score, team side and score state). It does not use candidate-player "
-        "attributes or roles. Therefore these probabilities are identical for A and B; "
-        "they are context estimates, not evidence that either replacement is better."
+        "These probabilities use match minute, score, score difference and home/away "
+        "status only. Player identity, position, role, fitness and manager data are not "
+        "model inputs. The estimates are therefore identical for A and B and cannot "
+        "identify a better replacement."
     )
-    cols = st.columns(2)
-    for col, label, player_id in zip(cols, ["Option A", "Option B"], [candidate_a, candidate_b]):
-        with col:
-            st.markdown(f"#### {label} · Player {player_id}")
-            for outcome in ["positive", "neutral", "negative"]:
-                value = probabilities.get(outcome, 0.0)
-                st.metric(f"{outcome.title()} outcome", f"{value:.1%}")
-            st.caption("Same match-state baseline; no candidate-specific adjustment.")
-
-    chart_data = pd.DataFrame(
-        {"Outcome": list(probabilities), "Estimated probability": list(probabilities.values())}
-    )
-    st.bar_chart(chart_data.set_index("Outcome"))
-    st.markdown("### Decision note")
+    cols = st.columns(3)
+    for col, outcome in zip(cols, ["positive", "neutral", "negative"]):
+        col.metric(f"{outcome.title()} outcome", f"{probs.get(outcome, 0):.1%}")
+    st.bar_chart(pd.DataFrame({"Probability": probs}).sort_index())
+    st.markdown("### Decision summary")
+    st.write(f"Option A: **{label(player_a)}** · Option B: **{label(player_b)}**")
     st.write(
-        "The model cannot currently rank these two players. Use role suitability, "
-        "fitness, tactical instructions and live match observation as separate "
-        "human assessments until validated player-level features are added."
+        "Use listed position as basic player context, then assess tactical role, fitness "
+        "and match observation separately. KICK-OFF does not yet calculate role fit or "
+        "recommend a winner."
     )
-else:
-    st.caption("Enter the match context and select **Compare options** to view baseline estimates.")
 
 st.divider()
 st.caption(
-    "Research prototype · Estimates are observational associations, not causal effects "
-    "or guarantees. Outcome labels are provisional pending further validation."
+    "Research prototype. Historical associations are not causal effects or guarantees. "
+    "Outcome labels remain provisional pending further validation."
 )
