@@ -106,6 +106,13 @@ if PLAYERS.exists():
             name = p.get("shortName") or " ".join(
                 x for x in [p.get("firstName"), p.get("middleName"), p.get("lastName")] if x
             ) or f"Player {pid}"
+            # Remove obvious numeric export suffixes from display labels only.
+            # Keep the raw Wyscout source untouched and retain the stable player ID.
+            import re
+            name = re.sub(r"\\s+\\d{2,}$", "", str(name)).strip()
+            name = re.sub(r"\\s+", " ", name)
+            if not name or not re.search(r"[A-Za-zÀ-ÿ]", name):
+                continue
             role = p.get("role")
             position = role.get("name", "Not listed") if isinstance(role, dict) else "Not listed"
             profiles[int(pid)] = (name, position)
