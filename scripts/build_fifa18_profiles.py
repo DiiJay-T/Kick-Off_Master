@@ -67,25 +67,39 @@ def main() -> None:
     wyscout_name_counts = {}
     for player in wyscout_players:
         if isinstance(player, dict):
-            label = player.get("shortName") or " ".join(str(player.get(k) or "") for k in ("firstName", "middleName", "lastName")).strip()
-            wyscout_name_counts[normalise(label)] = wyscout_name_counts.get(normalise(label), 0) + 1
+            display = player.get("shortName") or ""
+            full = " ".join(str(player.get(k) or "") for k in ("firstName", "lastName")).strip()
+            for alias in {normalise(display), normalise(full)}:
+                if alias:
+                    wyscout_name_counts[alias] = wyscout_name_counts.get(alias, 0) + 1
+
     for player in wyscout_players:
         if not isinstance(player, dict):
             continue
         pid = player.get("wyId")
-        name = player.get("shortName") or " ".join(
-            str(player.get(k) or "") for k in ("firstName", "middleName", "lastName")
-        ).strip()
-        key = normalise(name)
-        candidates = grouped[grouped["name_key"] == key]
-        if wyscout_name_counts.get(key, 0) > 1:
-            unmatched.append({"wy_id": pid, "wyscout_name": name, "reason": "duplicate_wyscout_name"})
-        elif len(candidates) == 1:
-            row = candidates.iloc[0].to_dict()
-            row.update({"wy_id": pid, "wyscout_name": name, "match_status": "exact_normalised_name"})
+        display = player.get("shortName") or ""
+        full = " ".join(str(player.get(k) or "") for k in ("firstName", "lastName")).strip()
+        name = full or display
+        aliases = list(dict.fromkeys(k for k in (normalise(full), normalise(display)) if k))
+        hits = []
+        for alias in aliases:
+            candidates = grouped[grouped["name_key"] == alias]
+            if len(candidates) == 1:
+                hits.append((alias, candidates.iloc[0]))
+        unique_hits = {str(row["name_key"]): row for _, row in hits}
+        if len(unique_hits) == 1 and all(wyscout_name_counts.get(alias, 0) == 1 for alias in aliases if alias in unique_hits):
+            row = next(iter(unique_hits.values())).to_dict()
+            row.update({
+                "wy_id": pid,
+                "wyscout_name": name,
+                "wyscout_display_name": display,
+                "match_status": "exact_full_name" if normalise(full) == row["name_key"] else "exact_display_name"
+            })
             rows.append(row)
-        elif len(candidates) > 1:
-            unmatched.append({"wy_id": pid, "wyscout_name": name, "reason": "ambiguous_fifa_name"})
+        elif len(unique_hits) > 1:
+            unmatched.append({"wy_id": pid, "wyscout_name": name, "reason": "conflicting_name_aliases"})
+        elif any(wyscout_name_counts.get(alias, 0) > 1 for alias in aliases):
+            unmatched.append({"wy_id": pid, "wyscout_name": name, "reason": "duplicate_wyscout_name"})
         else:
             unmatched.append({"wy_id": pid, "wyscout_name": name, "reason": "no_fifa_name_match"})
 
