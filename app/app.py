@@ -61,6 +61,7 @@ SUBS = ROOT / "data/processed/substitutions.csv"
 PLAYERS = ROOT / "data/raw/players.json"
 COACHES = ROOT / "data/processed/coach_appearances.csv"
 MANAGERS = ROOT / "data/reference/manager_profiles.json"
+FIFA_PROFILES = ROOT / "data/processed/player_fifa18_profiles.csv"
 
 if not MODEL.exists() or not SUBS.exists():
     st.error("Required files are missing. Follow the setup and training steps in the README.")
@@ -71,6 +72,15 @@ ids = sorted(set(subs.player_in.dropna().astype(int)) | set(subs.player_out.drop
 if not ids:
     st.error("No player IDs were found in the substitution dataset.")
     st.stop()
+
+fifa_profiles = {}
+if FIFA_PROFILES.exists():
+    try:
+        fifa_df = pd.read_csv(FIFA_PROFILES)
+        for _, row in fifa_df.iterrows():
+            fifa_profiles[str(row.get("wyscout_name", "")).strip().lower()] = row.to_dict()
+    except (OSError, ValueError, TypeError):
+        st.warning("FIFA 18 profiles could not be read; using position proxies.")
 
 profiles = {}
 if PLAYERS.exists():
@@ -163,9 +173,19 @@ def named_player_reference(name):
 
 def player_web_figure(position, name):
     reference = named_player_reference(name)
-    if reference:
+    fifa = fifa_profiles.get(str(name).strip().lower())
+    if fifa:
+        values = {
+            "Attacking threat": (float(fifa.get("fifa_shooting", 0)) + float(fifa.get("fifa_dribbling", 0))) / 40,
+            "Playmaking": float(fifa.get("fifa_passing", 0)) / 20,
+            "Link-up play": (float(fifa.get("fifa_passing", 0)) + float(fifa.get("fifa_dribbling", 0))) / 40,
+            "Defensive work": float(fifa.get("fifa_defending", 0)) / 20,
+            "Transition": (float(fifa.get("fifa_pace", 0)) + float(fifa.get("fifa_physical", 0))) / 40
+        }
+        label = "FIFA 18 card-derived profile"
+    elif reference:
         values = reference["values"]
-        label = "Named role reference"
+        label = "Curated named-player role reference"
     else:
         base = TACTICAL_ARCHETYPES[archetype(position)]
         values = {"Attacking threat": base["Attacking threat"], "Playmaking": base["Possession link"],
@@ -276,7 +296,7 @@ if run:
     chart = pd.DataFrame({"Estimated probability": [probs.get(k, 0) for k in ["positive", "neutral", "negative"]]}, index=["Positive", "Neutral", "Negative"])
     st.bar_chart(chart, use_container_width=True)
     st.markdown('<div class="section-label">04 / PLAYER SKILL WEB</div>', unsafe_allow_html=True)
-    st.caption("Named role references are used where available; otherwise the web is a position archetype proxy. FIFA/EA editions can enrich this layer once edition-specific ratings and source provenance are added.")
+    st.caption("FIFA 18 card ratings are mapped to broad tactical dimensions where a conservative Wyscout name match exists. Otherwise a named qualitative reference or position proxy is shown. Card ratings are game data, not real-world event measurements.")
     ca, cb = st.columns(2)
     with ca:
         st.markdown(f"**OPTION A · {name_a}**")
