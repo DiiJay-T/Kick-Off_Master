@@ -152,49 +152,69 @@ def skill_web_figure(position):
     return fig
 
 PLAYER_ROLE_REFERENCES = {
-    "kylian mbappe": ("Depth-running / transition forward",
-        "Explosive acceleration, carries into open space and threatens the channel behind the defensive line.",
-        "Best suited to space to attack; a deep block can reduce the value of his running lanes. FIFA card attributes are a historical game-data proxy, not tracking evidence."),
-    "robert lewandowski": ("Penalty-box reference striker",
-        "Central occupation, timing across the defensive line, finishing and combination play around the box.",
-        "Needs service into dangerous central areas; a low-touch role far from the box can underuse this profile. This is a role hypothesis, not a measured event conclusion."),
-    "lionel messi": ("Creative free-roaming forward",
-        "Receives between lines, carries centrally, creates through passes and can finish after moving infield.",
-        "Can improve chance creation when given freedom and runners ahead; may require teammates to preserve width and cover transition spaces. Role varies by season and team."),
-    "roberto firmino": ("Dropping / connective forward",
-        "Drops into midfield pockets, links combinations and creates space for runners beyond him.",
-        "Works best with runners attacking the space he vacates; may offer less penalty-box occupation than a fixed number nine.")
+    "kylian mbappe": ("Depth-running / transition forward", "Explosive acceleration, carries into open space and threatens the channel behind the defensive line.", "Best suited to space to attack; a deep block can reduce the value of his running lanes."),
+    "robert lewandowski": ("Penalty-box reference striker", "Central occupation, timing across the defensive line, finishing and combination play around the box.", "Needs service into dangerous central areas; a low-touch role far from the box can underuse this profile."),
+    "lionel messi": ("Creative free-roaming forward", "Receives between lines, carries centrally, creates through passes and can finish after moving infield.", "Needs freedom and runners ahead; teammates may need to preserve width and cover transition spaces."),
+    "roberto firmino": ("Dropping / connective forward", "Drops into midfield pockets, links combinations and creates space for runners beyond him.", "Works best with runners attacking the space he vacates; may offer less penalty-box occupation than a fixed number nine.")
 }
 
-def player_role_hypothesis(name, position):
+# Every player receives a role hypothesis. Known players get a named reference;
+# all other players get a position-specific sub-role inferred cautiously from
+# FIFA 18 attribute shape when available, otherwise a transparent role default.
+def player_role_hypothesis(name, position, player_id=None):
     key = " ".join(str(name).lower().replace(".", "").split())
     for known, detail in PLAYER_ROLE_REFERENCES.items():
         if known in key or key in known:
             return detail
     role = archetype(position)
-    defaults = {
-      "forward": ("Central or channel forward", "Attacks the last line or occupies central finishing zones.", "The exact balance of depth-running, link play and box occupation is not established for this player."),
-      "winger": ("Wide attacker", "Provides width, carries in wide areas and can attack the space behind a full-back.", "The player's preferred foot, crossing and infield tendencies need match-event evidence."),
-      "midfield": ("Central connector", "Can connect possession, support progression and contribute to defensive coverage.", "A central label does not distinguish a holding, box-to-box or advanced playmaker role."),
-      "defender": ("Defensive-line role", "Supports line protection, duels and progression from deeper areas.", "A defender label alone does not establish full-back, centre-back or build-up responsibilities."),
-      "goalkeeper": ("Goalkeeper", "Specialist goalkeeping role.", "No outfield tactical effect is inferred."),
-      "unknown": ("Role not established", "No reliable role description can be assigned from the available position field.", "More player-level evidence is required.")
-    }
-    return defaults[role]
+    record = fifa_profiles_by_id.get(int(player_id)) if player_id is not None else None
+    if not record:
+        record = fifa_profiles.get(key)
+    def score(field):
+        try:
+            value = float(record.get(field))
+            return value if pd.notna(value) else None
+        except (AttributeError, TypeError, ValueError):
+            return None
+    pace, shooting, passing = score("fifa_pace"), score("fifa_shooting"), score("fifa_passing")
+    dribbling, defending, physical = score("fifa_dribbling"), score("fifa_defending"), score("fifa_physical")
+    if role == "forward":
+        if pace is not None and pace >= 80 and (dribbling or 0) >= 70:
+            return ("Depth-running / transition forward", "Attribute shape suggests pace and ball-carrying may support runs beyond the line and attacks into open channels.", "This is a FIFA-card-based hypothesis; verify runs in behind and carries from Wyscout events.")
+        if passing is not None and passing >= 75 and (dribbling or 0) >= 75:
+            return ("Creative / dropping forward", "Attribute shape suggests a forward who may connect play, receive between lines and create for runners.", "Card ratings do not prove a false-nine role; confirm touches, passes and positioning in match data.")
+        if shooting is not None and shooting >= 78:
+            return ("Box-focused finishing forward", "Attribute shape suggests a player whose value may centre on finishing and occupying high-value shooting zones.", "Shot locations, touches in the box and chance quality are needed to validate this hypothesis.")
+        return ("Central / channel forward", "Can occupy the last line, attack central finishing zones or threaten channels depending on team structure.", "The available data does not yet separate a target striker, runner, poacher or link forward.")
+    if role == "winger":
+        if pace is not None and pace >= 80 and (dribbling or 0) >= 75:
+            return ("1v1 ball-carrying winger", "Attribute shape suggests acceleration and dribbling suited to isolations, carries and attacking the space behind full-backs.", "Preferred foot, crossing frequency and successful take-ons are needed to distinguish an outside winger from an inverted winger.")
+        if passing is not None and passing >= 75:
+            return ("Creative wide playmaker", "Attribute shape suggests a wide player who may create through combinations, crosses or passes into central areas.", "Actual chance creation and crossing locations must be checked in event data.")
+        return ("Width / channel winger", "Can stretch the pitch, receive wide and attack the channel between full-back and centre-back.", "The player's tendency to stay wide or move inside is not established by position alone.")
+    if role == "midfield":
+        if defending is not None and defending >= 70 and physical is not None and physical >= 70:
+            return ("Ball-winning / screening midfielder", "Attribute shape suggests defensive duels, screening and protection in front of the back line.", "Confirm recoveries, interceptions, defensive duels and positioning; card ratings are not event evidence.")
+        if passing is not None and passing >= 78:
+            return ("Deep distributor / playmaker", "Attribute shape suggests a passer who may dictate circulation and progress possession from deeper zones.", "Confirm progressive passes, switches, forward-pass share and pressure resistance.")
+        if shooting is not None and shooting >= 70 and physical is not None and physical >= 70:
+            return ("Box-to-box / arriving midfielder", "Attribute shape suggests a midfielder who may combine physical coverage with late attacking arrivals.", "Confirm distance/coverage proxies, box entries and timing of attacking runs before assigning this role.")
+        return ("Central connector", "Can link possession, support progression and contribute to defensive coverage between the lines.", "The source position does not establish whether this player is a holder, runner or advanced creator.")
+    if role == "defender":
+        if pace is not None and pace >= 75 and passing is not None and passing >= 65:
+            return ("Progressive / recovery defender", "Attribute shape suggests recovery speed and some capacity to advance or distribute from the back.", "Need observed defensive line position, carries and progressive passing to distinguish full-back, wide centre-back or covering centre-back.")
+        if defending is not None and defending >= 75 and physical is not None and physical >= 75:
+            return ("Duel-focused central defender", "Attribute shape suggests strength in physical defending and direct defensive contests.", "Confirm aerial and ground-duel volume, success, clearances and defensive positioning.")
+        if passing is not None and passing >= 75:
+            return ("Build-up distributor", "Attribute shape suggests a defender who may help initiate possession and break the first press.", "Confirm progressive passes, line-breaking passes and turnovers under pressure.")
+        return ("Defensive-line / support defender", "Supports line protection, duels and progression from deeper areas.", "A defender label alone cannot distinguish centre-back, full-back or wing-back responsibilities.")
+    if role == "goalkeeper":
+        return ("Goalkeeper / sweeper-keeper hypothesis", "Specialist goalkeeper role; distribution and starting position would distinguish a conventional keeper from a sweeper-keeper.", "Outfield attributes cannot establish goalkeeper style; goalkeeper-specific events and starting-position data are required.")
+    return ("Role not established", "The source position is unavailable or too broad to assign a reliable tactical sub-role.", "Keep the hypothesis unclassified until player position or match deployment evidence is available.")
 
-def plausible_effect(position, state, minute, name=""):
-    role = archetype(position)
-    specific = player_role_hypothesis(name, position)
-    if role in {"forward", "winger"}:
-        heading, mechanism, tradeoff = specific
-        return heading, mechanism, tradeoff
-    effects = {
-      "midfield": ("Control and circulation", "May add passing options and help connect phases; the exact midfield function is not established.", "An extra central option can help retain the ball, but the player's actual progression and defensive coverage need event evidence."),
-      "defender": ("Defensive security", "Adds a defensive-line option and may strengthen box protection.", "Could improve protection but reduce forward numbers; suitability depends on the specific defensive role."),
-      "goalkeeper": ("Goalkeeping role", "A goalkeeper is not a like-for-like outfield replacement; specialist review is required.", "No outfield tactical effect is inferred."),
-      "unknown": ("Insufficient position evidence", "The source-listed position is unavailable or too broad to assign a reliable role.", "KICK-OFF will not invent a skill profile when position evidence is missing.")
-    }
-    return effects[role]
+def plausible_effect(position, state, minute, name="", player_id=None):
+    return player_role_hypothesis(name, position, player_id)
+
 
 def player_label(pid):
     return f"{profiles.get(int(pid), (f'Player {pid}', 'Not listed'))[0]}  ·  #{pid}"
@@ -466,7 +486,7 @@ if run:
     st.markdown('<div class="section-label">06 / PLAUSIBLE MATCH EFFECT</div>', unsafe_allow_html=True)
     ea, eb = st.columns(2)
     for col, label, position, player_name in [(ea, "OPTION A", pos_a, name_a), (eb, "OPTION B", pos_b, name_b)]:
-        heading, tradeoff, explanation = plausible_effect(position, state, minute, player_name)
+        heading, tradeoff, explanation = plausible_effect(position, state, minute, player_name, player_id)
         with col:
             st.markdown(f'<div class="panel"><div class="panel-kicker">{label} · TACTICAL HYPOTHESIS</div><div class="panel-title">{heading}</div><div class="panel-sub">{tradeoff}</div></div>', unsafe_allow_html=True)
             st.write(explanation)
