@@ -78,7 +78,11 @@ if FIFA_PROFILES.exists():
     try:
         fifa_df = pd.read_csv(FIFA_PROFILES)
         for _, row in fifa_df.iterrows():
-            fifa_profiles[str(row.get("wyscout_name", "")).strip().lower()] = row.to_dict()
+            record = row.to_dict()
+            for alias in (row.get("wyscout_name", ""), row.get("wyscout_display_name", "")):
+                key = str(alias).strip().lower()
+                if key:
+                    fifa_profiles[key] = record
     except (OSError, ValueError, TypeError):
         st.warning("FIFA 18 profiles could not be read; using position proxies.")
 
