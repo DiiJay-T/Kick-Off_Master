@@ -177,7 +177,7 @@ def named_player_reference(name):
 
 def player_web_figure(position, name):
     reference = named_player_reference(name)
-    fifa = fifa_profiles.get(str(name).strip().lower())
+    fifa = fifa_profiles.get(str(name).strip().lower()) or fifa_profiles.get(" ".join(str(name).lower().split()))
     if fifa:
         values = {
             "Attacking threat": (float(fifa.get("fifa_shooting", 0)) + float(fifa.get("fifa_dribbling", 0))) / 40,
@@ -203,6 +203,45 @@ def player_web_figure(position, name):
         angularaxis=dict(gridcolor="#34485b")), showlegend=False, paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)", font_color="#eaf0f6", margin=dict(l=35,r=35,t=40,b=20), height=310)
     return fig
+
+def fifa_player_explanation(name):
+    """Return source-grounded attribute detail and cautious role interpretation."""
+    key = str(name).strip().lower()
+    record = fifa_profiles.get(key) or fifa_profiles.get(" ".join(key.split()))
+    if not record:
+        return None
+    labels = {
+        "fifa_pace": ("Pace", "A game-rating proxy for acceleration and speed; useful context for running in behind or recovery, not match-tracking speed."),
+        "fifa_shooting": ("Shooting", "A broad card rating for shot-related ability; it does not show shot volume, shot quality or finishing in this dataset."),
+        "fifa_passing": ("Passing", "A broad technical rating. Pair it with event-based progression and pass completion before judging playmaking."),
+        "fifa_dribbling": ("Dribbling", "A broad ball-carrying/control rating; it does not establish how often the player beats an opponent in matches."),
+        "fifa_defending": ("Defending", "A broad defensive card rating, not a direct measure of tackles, interceptions or defensive positioning in Wyscout."),
+        "fifa_physical": ("Physical", "A broad physicality rating; it is not a fitness, endurance or injury-risk measurement."),
+        "fifa_composure": ("Composure", "EA's game attribute, not a psychological assessment or validated measure of performance under pressure."),
+        "fifa_vision": ("Vision", "A game-rating proxy for awareness and passing vision; actual creative output needs event evidence."),
+        "fifa_reactions": ("Reactions", "A game attribute for responsiveness; it should not be presented as measured reaction time."),
+        "fifa_ball_control": ("Ball control", "A game rating for receiving and controlling the ball; event data is needed to assess retention under pressure."),
+        "fifa_short_passing": ("Short passing", "A game rating for short-pass execution; it does not reveal the player's actual pass success rate."),
+        "fifa_finishing": ("Finishing", "A game rating for finishing ability; actual goal conversion requires shots and goals with a suitable sample."),
+        "fifa_aggression": ("Aggression", "A game attribute associated with defensive intensity; it is not a behavioural or disciplinary judgement."),
+        "fifa_stamina": ("Stamina", "A game rating for endurance, not measured running output or current match fitness."),
+        "fifa_strength": ("Strength", "A game rating for physical duels, not a measured duel-win percentage."),
+        "fifa_interceptions": ("Interceptions", "A game rating for anticipation; actual interceptions should be counted from match events."),
+        "fifa_standing_tackle": ("Standing tackle", "A game rating for standing challenges; actual tackle volume and success are separate measures."),
+        "fifa_positioning": ("Positioning", "A game rating for attacking positioning, not a tracking-derived positional measure.")
+    }
+    rows = []
+    for field, (label, explanation) in labels.items():
+        value = record.get(field)
+        try:
+            number = float(value)
+            if pd.isna(number):
+                continue
+        except (TypeError, ValueError):
+            continue
+        rows.append({"Attribute": label, "FIFA 18 rating": round(number, 1), "What it can and cannot tell us": explanation})
+    return pd.DataFrame(rows) if rows else None
+
 
 def manager_web_figure(profile):
     scores = {dimension: 0.0 for dimension in MANAGER_DIMENSIONS}
@@ -307,6 +346,11 @@ if run:
         ref_a = named_player_reference(name_a)
         st.markdown(f"**{name_a}{' !' if ref_a and ref_a.get('impact_flag') else ''}**")
         st.plotly_chart(player_web_figure(pos_a, name_a), use_container_width=True, config={"displayModeBar":False})
+        detail_a = fifa_player_explanation(name_a)
+        if detail_a is not None:
+            st.markdown("**Attribute breakdown · Option A**")
+            st.dataframe(detail_a, hide_index=True, use_container_width=True)
+            st.caption("Ratings are FIFA 18 game attributes. Interpretations describe the attribute's scope; they are not claims about observed match performance.")
         if ref_a:
             st.write(ref_a["summary"])
             st.caption(ref_a["source_note"])
@@ -318,6 +362,11 @@ if run:
         ref_b = named_player_reference(name_b)
         st.markdown(f"**{name_b}{' !' if ref_b and ref_b.get('impact_flag') else ''}**")
         st.plotly_chart(player_web_figure(pos_b, name_b), use_container_width=True, config={"displayModeBar":False})
+        detail_b = fifa_player_explanation(name_b)
+        if detail_b is not None:
+            st.markdown("**Attribute breakdown · Option B**")
+            st.dataframe(detail_b, hide_index=True, use_container_width=True)
+            st.caption("Ratings are FIFA 18 game attributes. Interpretations describe the attribute's scope; they are not claims about observed match performance.")
         if ref_b:
             st.write(ref_b["summary"])
             st.caption(ref_b["source_note"])
