@@ -15,11 +15,11 @@ from pathlib import Path
 
 import pandas as pd
 
-URL = "https://raw.githubusercontent.com/kafagy/fifa-FUT-Data/master/FIFA18.csv"
-RAW = Path("data/raw/fifa18_ultimate_team.csv")
+URL = "https://raw.githubusercontent.com/kevinheavey/fifa18-even-more-player-data/master/data/final/current/complete.csv"
+RAW = Path("data/raw/fifa18_complete.csv")
 PLAYERS = Path("data/raw/players.json")
 OUT = Path("data/processed")
-RATING_COLS = ["PACE", "SHOOTING", "PASSING", "DRIBBLING", "DEFENDING", "PHYSICAL"]
+ATTRIBUTE_ALIASES = {"pace":["pace"],"shooting":["shooting"],"passing":["passing"],"dribbling":["dribbling"],"defending":["defending"],"physical":["physical"],"composure":["composure"],"vision":["vision"],"reactions":["reactions"],"ball_control":["ball_control","ballcontrol"],"short_passing":["short_passing","shortpassing"],"finishing":["finishing"],"aggression":["aggression"],"stamina":["stamina"],"strength":["strength"],"interceptions":["interceptions"],"standing_tackle":["standing_tackle","standingtackle"],"positioning":["positioning"]}
 
 
 def normalise(value: object) -> str:
@@ -41,24 +41,33 @@ def download() -> None:
 
 def main() -> None:
     download()
-    fifa = pd.read_csv(RAW)
-    required = {"NAME", "CLUB", "POSITION", *RATING_COLS}
-    missing = required - set(fifa.columns)
-    if missing:
-        raise ValueError(f"FIFA source schema changed; missing columns: {sorted(missing)}")
-    for column in RATING_COLS:
-        fifa[column] = pd.to_numeric(fifa[column], errors="coerce")
-    fifa["name_key"] = fifa["NAME"].map(normalise)
-
-    # Collapse multiple FUT cards/positions for one displayed name using medians.
-    # Keep counts and source clubs so the dashboard can disclose aggregation.
-    grouped = fifa.groupby("name_key", dropna=False).agg(
-        fifa_name=("NAME", "first"),
-        fifa_card_rows=("NAME", "size"),
-        fifa_clubs=("CLUB", lambda x: " | ".join(sorted(set(x.dropna().astype(str))))[:500]),
-        **{f"fifa_{c.lower()}": (c, "median") for c in RATING_COLS},
-    ).reset_index()
-
+    fifa = pd.read_csv(RAW, low_memory=False)
+    columns = {str(col).strip().lower().replace(" ", "_"): col for col in fifa.columns}
+    name_col = next((columns[k] for k in ("name", "player_name", "short_name") if k in columns), None)
+    club_col = next((columns[k] for k in ("club", "club_name", "team") if k in columns), None)
+    position_col = next((columns[k] for k in ("position", "best_position", "player_positions") if k in columns), None)
+    id_col = next((columns[k] for k in ("id", "sofifa_id", "player_id") if k in columns), None)
+    if name_col is None:
+        raise ValueError("FIFA source has no recognised player-name column. Columns: " + str(list(fifa.columns[:30])))
+    fifa["name_key"] = fifa[name_col].map(normalise)
+    selected = {}
+    for target, aliases in ATTRIBUTE_ALIASES.items():
+        source = next((columns[a] for a in aliases if a in columns), None)
+        if source:
+            selected[target] = source
+            fifa[source] = pd.to_numeric(fifa[source], errors="coerce")
+    if not selected:
+        raise ValueError("No recognised FIFA attribute columns found.")
+    aggregations = {"fifa_name": (name_col, "first"), "fifa_card_rows": (name_col, "size")}
+    if club_col:
+        aggregations["fifa_clubs"] = (club_col, lambda x: " | ".join(sorted(set(x.dropna().astype(str))))[:500])
+    if position_col:
+        aggregations["fifa_positions"] = (position_col, lambda x: " | ".join(sorted(set(x.dropna().astype(str))))[:200])
+    for target, source in selected.items():
+        aggregations["fifa_" + target] = (source, "median")
+    if id_col:
+        aggregations["fifa_ids"] = (id_col, lambda x: " | ".join(sorted(set(x.dropna().astype(str))))[:200])
+    grouped = fifa.groupby("name_key", dropna=False).agg(**aggregations).reset_index()
     with PLAYERS.open(encoding="utf-8") as handle:
         payload = json.load(handle)
     wyscout_players = payload if isinstance(payload, list) else payload.get("players", [])
