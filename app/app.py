@@ -134,6 +134,68 @@ def plausible_effect(position, state, minute):
 def player_label(pid):
     return f"{profiles.get(int(pid), (f'Player {pid}', 'Not listed'))[0]}  ·  #{pid}"
 
+PLAYER_STYLE_REFERENCES = {
+    "roberto firmino": {
+        "values": {"Attacking threat": 3.6, "Playmaking": 4.8, "Link-up play": 4.9, "Defensive work": 3.1, "Transition": 3.8},
+        "summary": "A forward who often drops between the lines, links combinations and creates space for runners. His striker label alone understates his connective playmaking role.",
+        "source_note": "Qualitative 2017/18 role reference; values are KICK-OFF interpretation, not official FIFA attributes.",
+        "impact_flag": True,
+        "flag_reason": "A curated high-impact role reference; the flag is editorial, not a model prediction."
+    }
+}
+MANAGER_DIMENSIONS = ["Possession", "Pressing", "Directness", "Defensive structure", "Positional rotation"]
+TAG_DIMENSIONS = {
+    "possession_dominance": "Possession", "possession": "Possession", "positional_play": "Positional rotation",
+    "structured_counterpress": "Pressing", "counterpress": "Pressing", "high_press": "Pressing",
+    "fast_transitions": "Directness", "vertical_attacking": "Directness", "direct_play": "Directness",
+    "compact_defence": "Defensive structure", "structured_defence": "Defensive structure",
+    "back_three": "Defensive structure", "inverted_fullbacks": "Positional rotation",
+    "central_overloads": "Positional rotation", "formation_flexibility": "Positional rotation"
+}
+MANAGER_STYLE_REFERENCES = {
+    "pep guardiola": {"impact_flag": True, "flag_reason": "Sustained elite team-level performance in the documented reference season."},
+    "jürgen klopp": {"impact_flag": True, "flag_reason": "Sustained elite team-level performance in the documented reference season."},
+    "jurgen klopp": {"impact_flag": True, "flag_reason": "Sustained elite team-level performance in the documented reference season."}
+}
+
+def named_player_reference(name):
+    return PLAYER_STYLE_REFERENCES.get(str(name).strip().lower())
+
+def player_web_figure(position, name):
+    reference = named_player_reference(name)
+    if reference:
+        values = reference["values"]
+        label = "Named role reference"
+    else:
+        base = TACTICAL_ARCHETYPES[archetype(position)]
+        values = {"Attacking threat": base["Attacking threat"], "Playmaking": base["Possession link"],
+                  "Link-up play": base["Possession link"], "Defensive work": base["Defensive work"],
+                  "Transition": base["Transition threat"]}
+        label = "Position archetype proxy"
+    keys = list(values)
+    fig = go.Figure(go.Scatterpolar(r=[values[k] for k in keys], theta=keys, fill="toself",
+        line_color="#c8f169", fillcolor="rgba(200,241,105,.18)"))
+    fig.update_layout(title=label, polar=dict(radialaxis=dict(visible=True, range=[0,5], gridcolor="#34485b"),
+        angularaxis=dict(gridcolor="#34485b")), showlegend=False, paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)", font_color="#eaf0f6", margin=dict(l=35,r=35,t=40,b=20), height=310)
+    return fig
+
+def manager_web_figure(profile):
+    scores = {dimension: 0.0 for dimension in MANAGER_DIMENSIONS}
+    for tag in profile.get("tactical_tags", []):
+        dimension = TAG_DIMENSIONS.get(str(tag).lower())
+        if dimension:
+            scores[dimension] = min(5.0, scores[dimension] + 2.5)
+    keys = list(scores)
+    fig = go.Figure(go.Scatterpolar(r=[scores[k] for k in keys], theta=keys, fill="toself",
+        line_color="#7bdff2", fillcolor="rgba(123,223,242,.16)"))
+    fig.update_layout(title=f"{profile.get('manager_name','Coach')} · encoded tactical themes",
+        polar=dict(radialaxis=dict(visible=True, range=[0,5], gridcolor="#34485b"),
+        angularaxis=dict(gridcolor="#34485b")), showlegend=False, paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)", font_color="#eaf0f6", margin=dict(l=35,r=35,t=40,b=20), height=310)
+    return fig
+
+
 with st.sidebar:
     st.markdown('<div class="eyebrow">01 / MATCH CONTEXT</div>', unsafe_allow_html=True)
     st.markdown("## Set the situation")
@@ -178,14 +240,19 @@ if selected_team != "Not specified" and not coach_df.empty:
     st.caption(f"Dataset records {len(team_rows)} coach appearances for {selected_team}; coach IDs: {', '.join(map(str, coach_ids))}. This is match-record identity, not a verified public manager name.")
     reference = next((x for x in manager_data.get("profiles",[]) if x.get("team_name","").lower() == selected_team.lower()), None)
     if reference:
-        st.info(
-            f"**2017/18 tactical reference — {reference['manager_name']}:** "
-            f"{reference['qualitative_summary']}\n\n"
-            f"Tags: {', '.join(reference.get('tactical_tags', []))}\n\n"
-            "This team-season reference is not automatically matched to the coach IDs above."
-        )
+        manager_name = reference.get("manager_name", "Unverified coach identity")
+        flag_data = MANAGER_STYLE_REFERENCES.get(manager_name.lower(), {})
+        flag = " !" if flag_data.get("impact_flag") else ""
+        st.markdown(f"**Coach profile{flag}: {manager_name} · {reference.get('season', 'season not specified')}**")
+        st.write(reference.get("qualitative_summary", "No written tactical summary is available."))
+        st.plotly_chart(manager_web_figure(reference), use_container_width=True, config={"displayModeBar":False})
+        st.caption(f"Evidence: {reference.get('evidence_type','not specified')} · confidence: {reference.get('confidence','not rated')}. Web dimensions are encoded from documented tactical tags, not measured match-by-match scores.")
+        if flag_data.get("impact_flag"):
+            st.caption("! " + flag_data["flag_reason"])
+        st.caption("The season reference is not automatically matched to the coach IDs above.")
     else:
-        st.info("No curated manager strategy is available for this team. The match-level coach ID is retained without guessing a manager identity or tactical philosophy.")
+        st.info("No researched coach profile is available for this team yet. The team and coach IDs remain visible; no tactical web is fabricated. This is a coverage gap, not a negative assessment.")
+        st.caption("A coach web will appear when a sourced, season-scoped profile is added to data/reference/manager_profiles.json.")
 else:
     st.caption("Select a team to inspect the recorded coach IDs and any available curated strategy reference.")
 
@@ -209,14 +276,30 @@ if run:
     chart = pd.DataFrame({"Estimated probability": [probs.get(k, 0) for k in ["positive", "neutral", "negative"]]}, index=["Positive", "Neutral", "Negative"])
     st.bar_chart(chart, use_container_width=True)
     st.markdown('<div class="section-label">04 / PLAYER SKILL WEB</div>', unsafe_allow_html=True)
-    st.caption("These are illustrative position-archetype tendencies, not measured individual player ratings. Individual event-derived skills are a future layer.")
+    st.caption("Named role references are used where available; otherwise the web is a position archetype proxy. FIFA/EA editions can enrich this layer once edition-specific ratings and source provenance are added.")
     ca, cb = st.columns(2)
     with ca:
         st.markdown(f"**OPTION A · {name_a}**")
-        st.plotly_chart(skill_web_figure(pos_a), use_container_width=True, config={"displayModeBar":False})
+        ref_a = named_player_reference(name_a)
+        st.markdown(f"**{name_a}{' !' if ref_a and ref_a.get('impact_flag') else ''}**")
+        st.plotly_chart(player_web_figure(pos_a, name_a), use_container_width=True, config={"displayModeBar":False})
+        if ref_a:
+            st.write(ref_a["summary"])
+            st.caption(ref_a["source_note"])
+            if ref_a.get("impact_flag"): st.caption("! " + ref_a["flag_reason"])
+        else:
+            st.caption("No named-player reference yet; this is a positional proxy.")
     with cb:
         st.markdown(f"**OPTION B · {name_b}**")
-        st.plotly_chart(skill_web_figure(pos_b), use_container_width=True, config={"displayModeBar":False})
+        ref_b = named_player_reference(name_b)
+        st.markdown(f"**{name_b}{' !' if ref_b and ref_b.get('impact_flag') else ''}**")
+        st.plotly_chart(player_web_figure(pos_b, name_b), use_container_width=True, config={"displayModeBar":False})
+        if ref_b:
+            st.write(ref_b["summary"])
+            st.caption(ref_b["source_note"])
+            if ref_b.get("impact_flag"): st.caption("! " + ref_b["flag_reason"])
+        else:
+            st.caption("No named-player reference yet; this is a positional proxy.")
     st.markdown('<div class="section-label">05 / PLAUSIBLE MATCH EFFECT</div>', unsafe_allow_html=True)
     ea, eb = st.columns(2)
     for col, label, position in [(ea, "OPTION A", pos_a), (eb, "OPTION B", pos_b)]:
