@@ -178,9 +178,12 @@ if selected_team != "Not specified" and not coach_df.empty:
     st.caption(f"Dataset records {len(team_rows)} coach appearances for {selected_team}; coach IDs: {', '.join(map(str, coach_ids))}. This is match-record identity, not a verified public manager name.")
     reference = next((x for x in manager_data.get("profiles",[]) if x.get("team_name","").lower() == selected_team.lower()), None)
     if reference:
-        st.info(f"**2017/18 tactical reference — {reference['manager_name']}:** {reference['qualitative_summary']}  
-Tags: {', '.join(reference.get('tactical_tags', []))}  
-This team-season reference is not automatically matched to the coach IDs above.")
+        st.info(
+            f"**2017/18 tactical reference — {reference['manager_name']}:** "
+            f"{reference['qualitative_summary']}\n\n"
+            f"Tags: {', '.join(reference.get('tactical_tags', []))}\n\n"
+            "This team-season reference is not automatically matched to the coach IDs above."
+        )
     else:
         st.info("No curated manager strategy is available for this team. The match-level coach ID is retained without guessing a manager identity or tactical philosophy.")
 else:
