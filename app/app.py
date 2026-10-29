@@ -12,6 +12,7 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 from src.models.predict import predict_match_state
+from src.data.player_identity import clean_player_display_name
 
 st.set_page_config(page_title="KICK-OFF | Substitution Lab", page_icon="⚽", layout="wide")
 
@@ -108,9 +109,7 @@ if PLAYERS.exists():
             ) or f"Player {pid}"
             # Remove obvious numeric export suffixes from display labels only.
             # Keep the raw Wyscout source untouched and retain the stable player ID.
-            import re
-            name = re.sub(r"\\s+\\d{2,}$", "", str(name)).strip()
-            name = re.sub(r"\\s+", " ", name)
+            name = clean_player_display_name(name)
             if not name or not re.search(r"[A-Za-zÀ-ÿ]", name):
                 continue
             role = p.get("role")
@@ -485,7 +484,10 @@ if run:
             st.caption("No named-player reference yet; this is a positional proxy.")
     st.markdown('<div class="section-label">06 / PLAUSIBLE MATCH EFFECT</div>', unsafe_allow_html=True)
     ea, eb = st.columns(2)
-    for col, label, position, player_name in [(ea, "OPTION A", pos_a, name_a), (eb, "OPTION B", pos_b, name_b)]:
+    for col, label, position, player_name, player_id in [
+        (ea, "OPTION A", pos_a, name_a, player_a),
+        (eb, "OPTION B", pos_b, name_b, player_b),
+    ]:
         heading, tradeoff, explanation = plausible_effect(position, state, minute, player_name, player_id)
         with col:
             st.markdown(f'<div class="panel"><div class="panel-kicker">{label} · TACTICAL HYPOTHESIS</div><div class="panel-title">{heading}</div><div class="panel-sub">{tradeoff}</div></div>', unsafe_allow_html=True)
