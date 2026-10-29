@@ -135,22 +135,57 @@ def skill_web_figure(position):
     values = TACTICAL_ARCHETYPES[archetype(position)]
     keys = list(values)
     fig = go.Figure(go.Scatterpolar(r=[values[k] for k in keys], theta=keys,
-        fill="toself", line_color="#c8f169", fillcolor="rgba(200,241,105,.18)"))
-    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0,5], gridcolor="#34485b"),
-        angularaxis=dict(gridcolor="#34485b")), showlegend=False,
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font_color="#eaf0f6", margin=dict(l=35,r=35,t=20,b=20), height=300)
+        fill="toself", line=dict(color="#ffb000", width=4),
+        fillcolor="rgba(255,176,0,.32)", marker=dict(size=7, color="#ff5e3a")))
+    fig.update_layout(polar=dict(bgcolor="rgba(15,25,42,.55)",
+        radialaxis=dict(visible=True, range=[0,5], gridcolor="#53647d", tickfont=dict(color="#dce7f5")),
+        angularaxis=dict(gridcolor="#53647d", tickfont=dict(color="#f2f6ff"))),
+        showlegend=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#f2f6ff", margin=dict(l=45,r=45,t=24,b=24), height=320)
     return fig
 
-def plausible_effect(position, state, minute):
+PLAYER_ROLE_REFERENCES = {
+    "kylian mbappe": ("Depth-running / transition forward",
+        "Explosive acceleration, carries into open space and threatens the channel behind the defensive line.",
+        "Best suited to space to attack; a deep block can reduce the value of his running lanes. FIFA card attributes are a historical game-data proxy, not tracking evidence."),
+    "robert lewandowski": ("Penalty-box reference striker",
+        "Central occupation, timing across the defensive line, finishing and combination play around the box.",
+        "Needs service into dangerous central areas; a low-touch role far from the box can underuse this profile. This is a role hypothesis, not a measured event conclusion."),
+    "lionel messi": ("Creative free-roaming forward",
+        "Receives between lines, carries centrally, creates through passes and can finish after moving infield.",
+        "Can improve chance creation when given freedom and runners ahead; may require teammates to preserve width and cover transition spaces. Role varies by season and team."),
+    "roberto firmino": ("Dropping / connective forward",
+        "Drops into midfield pockets, links combinations and creates space for runners beyond him.",
+        "Works best with runners attacking the space he vacates; may offer less penalty-box occupation than a fixed number nine.")
+}
+
+def player_role_hypothesis(name, position):
+    key = " ".join(str(name).lower().replace(".", "").split())
+    for known, detail in PLAYER_ROLE_REFERENCES.items():
+        if known in key or key in known:
+            return detail
     role = archetype(position)
+    defaults = {
+      "forward": ("Central or channel forward", "Attacks the last line or occupies central finishing zones.", "The exact balance of depth-running, link play and box occupation is not established for this player."),
+      "winger": ("Wide attacker", "Provides width, carries in wide areas and can attack the space behind a full-back.", "The player's preferred foot, crossing and infield tendencies need match-event evidence."),
+      "midfield": ("Central connector", "Can connect possession, support progression and contribute to defensive coverage.", "A central label does not distinguish a holding, box-to-box or advanced playmaker role."),
+      "defender": ("Defensive-line role", "Supports line protection, duels and progression from deeper areas.", "A defender label alone does not establish full-back, centre-back or build-up responsibilities."),
+      "goalkeeper": ("Goalkeeper", "Specialist goalkeeping role.", "No outfield tactical effect is inferred."),
+      "unknown": ("Role not established", "No reliable role description can be assigned from the available position field.", "More player-level evidence is required.")
+    }
+    return defaults[role]
+
+def plausible_effect(position, state, minute, name=""):
+    role = archetype(position)
+    specific = player_role_hypothesis(name, position)
+    if role in {"forward", "winger"}:
+        heading, mechanism, tradeoff = specific
+        return heading, mechanism, tradeoff
     effects = {
-      "forward": ("Attacking outlet", "Offers a higher target and more penalty-area presence; may reduce midfield link play.", "If chasing the game, extra forward presence can increase box occupation. It can also leave fewer players connecting midfield."),
-      "winger": ("Width and transition", "Can stretch the back line and provide a direct ball-carrying outlet; defensive tracking may vary.", "A wide runner may help attack space quickly, but possession can become less secure if attacks are rushed."),
-      "midfield": ("Control and circulation", "May add passing options and help connect phases; attacking depth depends on the player's actual profile.", "An extra central option can help retain the ball and manage tempo, especially when protecting a lead."),
-      "defender": ("Defensive security", "Adds a natural defensive profile and may strengthen box protection; could reduce forward numbers.", "A defensive profile may support a narrow lead, while increasing attacking pressure can become harder if a forward is removed."),
-      "goalkeeper": ("Goalkeeping role", "A goalkeeper is not a like-for-like outfield replacement; this option needs a specialist review.", "No outfield tactical effect is inferred for a goalkeeper substitution."),
-      "unknown": ("Insufficient position evidence", "The source-listed position is unavailable or too broad to assign a reliable role archetype.", "KICK-OFF will not invent a skill profile when position evidence is missing."),
+      "midfield": ("Control and circulation", "May add passing options and help connect phases; the exact midfield function is not established.", "An extra central option can help retain the ball, but the player's actual progression and defensive coverage need event evidence."),
+      "defender": ("Defensive security", "Adds a defensive-line option and may strengthen box protection.", "Could improve protection but reduce forward numbers; suitability depends on the specific defensive role."),
+      "goalkeeper": ("Goalkeeping role", "A goalkeeper is not a like-for-like outfield replacement; specialist review is required.", "No outfield tactical effect is inferred."),
+      "unknown": ("Insufficient position evidence", "The source-listed position is unavailable or too broad to assign a reliable role.", "KICK-OFF will not invent a skill profile when position evidence is missing.")
     }
     return effects[role]
 
@@ -206,12 +241,18 @@ def player_web_figure(position, name, player_id=None):
                   "Link-up play": base["Possession link"], "Defensive work": base["Defensive work"],
                   "Transition": base["Transition threat"]}
         label = "Position archetype proxy"
+    values = {key: max(0.0, min(5.0, float(pd.to_numeric(value, errors="coerce"))))
+              if pd.notna(pd.to_numeric(value, errors="coerce")) else 0.0
+              for key, value in values.items()}
     keys = list(values)
     fig = go.Figure(go.Scatterpolar(r=[values[k] for k in keys], theta=keys, fill="toself",
-        line_color="#c8f169", fillcolor="rgba(200,241,105,.18)"))
-    fig.update_layout(title=label, polar=dict(radialaxis=dict(visible=True, range=[0,5], gridcolor="#34485b"),
-        angularaxis=dict(gridcolor="#34485b")), showlegend=False, paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)", font_color="#eaf0f6", margin=dict(l=35,r=35,t=40,b=20), height=310)
+        line=dict(color="#ffb000", width=4), fillcolor="rgba(255,176,0,.32)",
+        marker=dict(size=7, color="#ff5e3a")))
+    fig.update_layout(title=label, polar=dict(bgcolor="rgba(15,25,42,.55)",
+        radialaxis=dict(visible=True, range=[0,5], gridcolor="#53647d", tickfont=dict(color="#dce7f5")),
+        angularaxis=dict(gridcolor="#53647d", tickfont=dict(color="#f2f6ff"))),
+        showlegend=False, paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)", font_color="#f2f6ff", margin=dict(l=45,r=45,t=44,b=24), height=320)
     return fig
 
 def fifa_player_explanation(name, player_id=None):
@@ -262,9 +303,9 @@ def manager_web_figure(profile):
             scores[dimension] = min(5.0, scores[dimension] + 2.5)
     keys = list(scores)
     fig = go.Figure(go.Scatterpolar(r=[scores[k] for k in keys], theta=keys, fill="toself",
-        line_color="#7bdff2", fillcolor="rgba(123,223,242,.16)"))
+        line_color="#ffb000", fillcolor="rgba(255,176,0,.28)"))
     fig.update_layout(title=f"{profile.get('manager_name','Coach')} · encoded tactical themes",
-        polar=dict(radialaxis=dict(visible=True, range=[0,5], gridcolor="#34485b"),
+        polar=dict(radialaxis=dict(visible=True, range=[0,5], gridcolor="#53647d"),
         angularaxis=dict(gridcolor="#34485b")), showlegend=False, paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)", font_color="#eaf0f6", margin=dict(l=35,r=35,t=40,b=20), height=310)
     return fig
@@ -417,8 +458,8 @@ if run:
             st.caption("No named-player reference yet; this is a positional proxy.")
     st.markdown('<div class="section-label">06 / PLAUSIBLE MATCH EFFECT</div>', unsafe_allow_html=True)
     ea, eb = st.columns(2)
-    for col, label, position in [(ea, "OPTION A", pos_a), (eb, "OPTION B", pos_b)]:
-        heading, tradeoff, explanation = plausible_effect(position, state, minute)
+    for col, label, position, player_name in [(ea, "OPTION A", pos_a, name_a), (eb, "OPTION B", pos_b, name_b)]:
+        heading, tradeoff, explanation = plausible_effect(position, state, minute, player_name)
         with col:
             st.markdown(f'<div class="panel"><div class="panel-kicker">{label} · TACTICAL HYPOTHESIS</div><div class="panel-title">{heading}</div><div class="panel-sub">{tradeoff}</div></div>', unsafe_allow_html=True)
             st.write(explanation)
