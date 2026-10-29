@@ -64,6 +64,11 @@ def main() -> None:
     wyscout_players = payload if isinstance(payload, list) else payload.get("players", [])
     rows = []
     unmatched = []
+    wyscout_name_counts = {}
+    for player in wyscout_players:
+        if isinstance(player, dict):
+            label = player.get("shortName") or " ".join(str(player.get(k) or "") for k in ("firstName", "middleName", "lastName")).strip()
+            wyscout_name_counts[normalise(label)] = wyscout_name_counts.get(normalise(label), 0) + 1
     for player in wyscout_players:
         if not isinstance(player, dict):
             continue
@@ -73,7 +78,9 @@ def main() -> None:
         ).strip()
         key = normalise(name)
         candidates = grouped[grouped["name_key"] == key]
-        if len(candidates) == 1:
+        if wyscout_name_counts.get(key, 0) > 1:
+            unmatched.append({"wy_id": pid, "wyscout_name": name, "reason": "duplicate_wyscout_name"})
+        elif len(candidates) == 1:
             row = candidates.iloc[0].to_dict()
             row.update({"wy_id": pid, "wyscout_name": name, "match_status": "exact_normalised_name"})
             rows.append(row)
