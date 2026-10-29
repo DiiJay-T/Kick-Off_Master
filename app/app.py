@@ -74,17 +74,26 @@ if not ids:
     st.stop()
 
 fifa_profiles = {}
+fifa_profiles_by_id = {}
 if FIFA_PROFILES.exists():
     try:
         fifa_df = pd.read_csv(FIFA_PROFILES)
         for _, row in fifa_df.iterrows():
             record = row.to_dict()
+            try:
+                fifa_profiles_by_id[int(row["wy_id"])] = record
+            except (KeyError, TypeError, ValueError):
+                pass
             for alias in (row.get("wyscout_name", ""), row.get("wyscout_display_name", "")):
-                key = str(alias).strip().lower()
+                key = " ".join(str(alias).strip().lower().split())
                 if key:
                     fifa_profiles[key] = record
-    except (OSError, ValueError, TypeError):
-        st.warning("FIFA 18 profiles could not be read; using position proxies.")
+        if fifa_df.empty:
+            st.warning("The FIFA profile file exists but contains no matched players.")
+    except (OSError, ValueError, TypeError) as exc:
+        st.warning(f"FIFA 18 profiles could not be read ({exc}); using position proxies.")
+else:
+    st.warning("FIFA 18 profile file is missing. Run scripts/build_fifa18_profiles.py to generate it.")
 
 profiles = {}
 if PLAYERS.exists():
@@ -175,9 +184,10 @@ MANAGER_STYLE_REFERENCES = {
 def named_player_reference(name):
     return PLAYER_STYLE_REFERENCES.get(str(name).strip().lower())
 
-def player_web_figure(position, name):
+def player_web_figure(position, name, player_id=None):
     reference = named_player_reference(name)
-    fifa = fifa_profiles.get(str(name).strip().lower()) or fifa_profiles.get(" ".join(str(name).lower().split()))
+    fifa = fifa_profiles_by_id.get(int(player_id)) if player_id is not None else None
+    fifa = fifa or fifa_profiles.get(" ".join(str(name).strip().lower().split()))
     if fifa:
         values = {
             "Attacking threat": (float(fifa.get("fifa_shooting", 0)) + float(fifa.get("fifa_dribbling", 0))) / 40,
@@ -204,10 +214,11 @@ def player_web_figure(position, name):
         plot_bgcolor="rgba(0,0,0,0)", font_color="#eaf0f6", margin=dict(l=35,r=35,t=40,b=20), height=310)
     return fig
 
-def fifa_player_explanation(name):
+def fifa_player_explanation(name, player_id=None):
     """Return source-grounded attribute detail and cautious role interpretation."""
-    key = str(name).strip().lower()
-    record = fifa_profiles.get(key) or fifa_profiles.get(" ".join(key.split()))
+    record = fifa_profiles_by_id.get(int(player_id)) if player_id is not None else None
+    key = " ".join(str(name).strip().lower().split())
+    record = record or fifa_profiles.get(key)
     if not record:
         return None
     labels = {
@@ -345,8 +356,8 @@ if run:
         st.markdown(f"**OPTION A · {name_a}**")
         ref_a = named_player_reference(name_a)
         st.markdown(f"**{name_a}{' !' if ref_a and ref_a.get('impact_flag') else ''}**")
-        st.plotly_chart(player_web_figure(pos_a, name_a), use_container_width=True, config={"displayModeBar":False})
-        detail_a = fifa_player_explanation(name_a)
+        st.plotly_chart(player_web_figure(pos_a, name_a, player_a), use_container_width=True, config={"displayModeBar":False})
+        detail_a = fifa_player_explanation(name_a, player_a)
         if detail_a is not None:
             st.markdown("**Attribute breakdown · Option A**")
             st.dataframe(detail_a, hide_index=True, use_container_width=True)
@@ -361,8 +372,8 @@ if run:
         st.markdown(f"**OPTION B · {name_b}**")
         ref_b = named_player_reference(name_b)
         st.markdown(f"**{name_b}{' !' if ref_b and ref_b.get('impact_flag') else ''}**")
-        st.plotly_chart(player_web_figure(pos_b, name_b), use_container_width=True, config={"displayModeBar":False})
-        detail_b = fifa_player_explanation(name_b)
+        st.plotly_chart(player_web_figure(pos_b, name_b, player_b), use_container_width=True, config={"displayModeBar":False})
+        detail_b = fifa_player_explanation(name_b, player_b)
         if detail_b is not None:
             st.markdown("**Attribute breakdown · Option B**")
             st.dataframe(detail_b, hide_index=True, use_container_width=True)
